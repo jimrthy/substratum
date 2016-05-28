@@ -1,5 +1,5 @@
 (defproject com.jimrthy.substratum "0.1.0-SNAPSHOT"
-  :dependencies [[com.datomic/datomic-free "0.9.5359"]
+  :dependencies [[com.datomic/datomic-free "0.9.5359" :exclusions [com.google.guava/guava]]
                  ;; Since this is supposed to be a library,
                  ;; I really shouldn't even depend on either
                  ;; of these
@@ -9,7 +9,7 @@
                  [com.taoensso/timbre "4.3.1"]
                  [datomic-schema "1.3.0"]
                  ;; This seems even worse
-                 [im.chit/hara.event "2.2.17"]
+                 [im.chit/hara.event "2.3.6"]
                  ;; This seems very debatable
                  ;; End-users probably need to be responsible
                  ;; for their own data migration paths
@@ -26,7 +26,7 @@
                  [org.clojure/clojure "1.8.0"]
                  [org.clojure/core.async "0.2.374"]
                  ;; I even have my doubts about this
-                 [prismatic/schema "1.0.5"]
+                 [prismatic/schema "1.1.1"]
                  ]
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
