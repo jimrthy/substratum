@@ -1,7 +1,9 @@
 (defproject com.jimrthy.substratum "0.1.0-SNAPSHOT"
   :dependencies [[com.datomic/datomic-free "0.9.5359"]
                  ;; Since this is supposed to be a library,
-                 ;; I really shouldn't even depend on this
+                 ;; I really shouldn't even depend on either
+                 ;; of these
+                 [com.jimrthy/component-dsl "0.1.1-SNAPSHOT"]
                  [com.stuartsierra/component "0.3.1"]
                  ;; This really doesn't seem worth including
                  [com.taoensso/timbre "4.3.1"]
