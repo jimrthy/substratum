@@ -1,4 +1,4 @@
-(ns substratum.core)
+(ns com.jimrthy.substratum.core)
 
 (defn foo
   "I don't do a whole lot."

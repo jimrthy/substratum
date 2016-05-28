@@ -1,7 +1,7 @@
-(ns substratum.core-test
+(ns com.jimrthy.substratum.core-test
   (:require [clojure.test :refer :all]
-            [substratum.core :refer :all]))
+            [com.jimrthy.substratum.core :refer :all]))
 
 (deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+  (testing "Zero identity"
+    (is (= 0 0))))
