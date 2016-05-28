@@ -1,7 +1,20 @@
 (ns com.jimrthy.substratum.core-test
-  (:require [clojure.test :refer :all]
-            [com.jimrthy.substratum.core :refer :all]))
+  "Test core database functionality"
+  (require [clojure.test :refer [deftest is testing] :as test]
+           [com.jimrthy.substratum.core :refer :all]
+           ;; TODO: Convert this to component-dsl
+           [com.stuartsierra.component :as component]))
 
-(deftest a-test
-  (testing "Zero identity"
-    (is (= 0 0))))
+(deftest memory-basics
+  (let [uri-description {:name (gensym "core-memory-test-basics")
+                         :protocol :ram}
+        disconnected (uri-ctor uri-description)
+        started (component/start disconnected)
+        uri (:connection-string started)]
+    (try
+      ;; TODO: Have to install Schema first.
+      ;; Which really means the appropriate Platform schemas so
+      ;; I can use it to build meaningful Records.
+      (upsert! uri [])
+      (finally
+        (component/stop started)))))
