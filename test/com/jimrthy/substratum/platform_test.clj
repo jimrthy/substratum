@@ -5,8 +5,8 @@
             [com.jimrthy.substratum.core :as db]
             [com.jimrthy.substratum.platform :as platform]
             [com.jimrthy.substratum.util :as util]
-            [com.jimrthy.cluster-web.web.system :as sys]
             [com.stuartsierra.component :as component]
+            [component-dsl.system :as cpt-dsl]
             [datomic.api :as d]
             [datomic-schema.schema :refer [defdbfn
                                            fields
@@ -34,8 +34,7 @@
 
 (defn system-for-testing
   []
-  (throw (ex-info "Not Implemented" {:todo "Define testing system"}))
-  (let [base-system (sys/ctor "admin.test-system.edn")]
+  (let [base-system (cpt-dsl/ctor "admin.test-system.edn")]
     (assoc base-system :database-uri (db/uri-ctor {:description {:name (gensym)
                                                                  :protocol :ram}}))))
 

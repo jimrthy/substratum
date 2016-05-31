@@ -8,7 +8,7 @@
 (deftest memory-basics
   (let [uri-description {:name (gensym "core-memory-test-basics")
                          :protocol :ram}
-        disconnected (uri-ctor uri-description)
+        disconnected (uri-ctor {:description uri-description})
         started (component/start disconnected)
         uri (:connection-string started)]
     (try

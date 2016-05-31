@@ -1,0 +1,32 @@
+[["testing-base" "testing-one" "something-completely-different"]
+ {dt {dt [:ref #{"Think of an object's class"}]
+      namespace [:string #{"Think of a class' package"}]
+      name [:string #{".getSimpleName"}]
+      parent [:ref #{"For Type hierarchies and inheritance"}]
+      list [:ref #{"For N-d lists"}]
+      component [:ref #{"If this Type is a list, this describes what that list contains"}]
+      fields [:ref #{"Member variables" :many}]
+      any [:ref #{"Built-in types enumeration. Needs to point to a dt.any Entity"}]}
+  ;; These next are for the Any/Variant type
+  dt.any {bigdec [:bigdec]
+          bigint [:bigint]
+          boolean [:boolean]
+          bytes [:bytes]
+          double [:double]
+          float [:float]
+          instant [:instant]
+          keyword [:keyword]
+          long [:long]
+          ref [:ref]
+          string [:string]
+          uri [:uri]
+          uuid [:uuid]}}
+ #_{  }
+ [;; Baseline datatype
+  {:db/id :dt/dt
+   :dt/dt :dt/dt
+   :dt/namespace "system"
+   :dt/name "Datatype"
+   :dt/fields [:dt/dt :dt/namespace :dt/name :dt/parent
+               :dt/list :dt/component :dt/fields]}
+  ]]

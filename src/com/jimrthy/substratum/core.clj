@@ -19,7 +19,8 @@
   ;; TODO: Add the rest
   (s/enum :free :ram :sql))
 
-(defn sql-drivers []
+(defn sql-drivers
+  []
   (s/enum :postgres))
 
 (defn base-uri-description
@@ -65,8 +66,8 @@
    "Main point is to verify that we can connect
 Although this also serves to create the database
 if it doesn't already exast and cache the connection"
-   (comment (log/debug "Starting up the URL. Description: " (util/pretty description)
-                       "with keys:" (keys description)))
+   (comment) (log/debug "Starting up the URL. Description: " (util/pretty description)
+                        "with keys:" (keys description))
    (let [connection-string (build-connection-string description)]
      (when (d/create-database connection-string)
        (log/warn "Created new database"))

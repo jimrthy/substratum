@@ -7,6 +7,7 @@
                  [com.stuartsierra/component "0.3.1"]
                  ;; This really doesn't seem worth including
                  [com.taoensso/timbre "4.3.1"]
+                 ;; Q: How much value-add do I get here?
                  [datomic-schema "1.3.0"]
                  ;; This seems even worse
                  [im.chit/hara.event "2.3.6"]
@@ -31,4 +32,5 @@
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :profiles {:dev {:resource-paths ["dev-resources"]}}
   :url "https://github.com/jimrthy/substratum")
