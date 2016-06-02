@@ -227,7 +227,7 @@ But, seriously. I had to start somewhere."
           (is (= (:class root-details) Exceptions$IllegalArgumentExceptionInfo))
           (is (= ":db.error/not-an-entity Unable to resolve entity: :dt/dt" (:message root-details))))
         (let [migration-ret-val
-              (platform/do-schema-installation cxn-str structural-txn)]
+              (platform/do-schema-installation cxn-str "silly-test" structural-txn)]
           (is (not migration-ret-val)))
         (is (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt))
         (let [datatypes (db/q sql cxn-str)]
@@ -254,7 +254,7 @@ But, seriously. I had to start somewhere."
         conn (d/connect cxn-str)]
     (is (not (conformity/has-attribute? (d/db conn) :dt/dt)))
     (let [schema-cpt (:database-schema system)]
-      (platform/install-schema! schema-cpt))
+      (platform/install-schema! "edn-test" schema-cpt))
     (is (conformity/has-attribute? (d/db conn) :dt/dt))))
 
 (deftest data-platform-basics
@@ -262,7 +262,7 @@ But, seriously. I had to start somewhere."
   (let [cxn-str (extract-connection-string)
         conn (d/connect cxn-str)]
     (let [schema-cpt (:database-schema system)]
-      (platform/install-schema! schema-cpt))
+      (platform/install-schema! schema-cpt "testing-platform-basics"))
     ;; OK, we should have everything set up to let
     ;; us start rocking and rolling with our kick-ass
     ;; Data Platform.

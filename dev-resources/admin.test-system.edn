@@ -1,6 +1,6 @@
 {:structure
  {:database-schema com.jimrthy.substratum.platform/ctor
   :database-uri com.jimrthy.substratum.core/uri-ctor}
- :dependencies {:database-schema [{:uri :database-uri}]}
+ :dependencies {:database-schema {:uri :database-uri}}
  :options {:database-schema {:schema-resource-name "test-schema.edn"}
            :database-uri {:description {:name "automatic-test" :protocol :ram}}}}

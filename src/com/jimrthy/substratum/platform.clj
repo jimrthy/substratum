@@ -60,8 +60,8 @@
 
 (defn SchemaTransaction []
   (into (db/BaseTransaction) {:db/ident s/Keyword
-                              :db/cardinality cardinality-options
-                              :db/valueType value-types
+                              :db/cardinality (cardinality-options)
+                              :db/valueType (value-types)
                               ;; TODO: We could also do alterations
                               :db.install/_attribute s/Keyword ; must be :db.part/db
                               (s/optional-key :db/doc) s/Str
@@ -69,7 +69,7 @@
                               (s/optional-key :db/index) s/Bool
                               (s/optional-key :db/isComponent) s/Bool ; ref attributes become sub-components
                               (s/optional-key :db/no-history) s/Bool
-                              (s/optional-key :db.unique) uniqueness}))
+                              (s/optional-key :db.unique) (uniqueness)}))
 
 ;; This could be done as two steps in one transaction...but why?
 (defn PartitionTransaction []
@@ -78,8 +78,10 @@
                               :db.install/_partition s/Keyword}))
 
 (defn IndividualTxn []
-  (s/either SchemaTransaction PartitionTransaction db/UpsertTransaction db/RetractTxn))
-(def TransactionSequence [IndividualTxn])
+  (s/either (SchemaTransaction) (PartitionTransaction) (db/UpsertTransaction) (db/RetractTxn)))
+(defn TransactionSequence
+  []
+  [(IndividualTxn)])
 
 (defn PartTxnDescrSeq
   "Really just a sequence of names"
@@ -94,41 +96,45 @@
     (s/optional #{(s/either s/Str s/Keyword)} "options")]})
 
 (defn AttrTxnDescrSeq []
-  {s/Symbol AttrTxnDescr})
+  {s/Symbol (AttrTxnDescr)})
 
 (defn TxnDescrSeq []
-  [(s/one PartTxnDescrSeq "parts")
-   (s/one AttrTxnDescrSeq "attributes")])
+  [(s/one (PartTxnDescrSeq) "parts")
+   (s/one (AttrTxnDescrSeq) "attributes")])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
 
-(s/defn ^:always-validate transact-schema! :- db/TransactionResult
+(s/defn ^:always-validate obsolete-transact-schema! :- db/TransactionResult
   [conn :- datomic.peer.LocalConnection
-   txns :- [(s/either SchemaTransaction PartitionTransaction)]]
+   txns :- [(s/either (SchemaTransaction) (PartitionTransaction))]]
   (raise {:obsolete "Use do-schema-installation instead"})
   @(d/transact conn txns))
 
 (s/defn ^:always-validate do-schema-installation
   "Add schema/partition"
   [uri :- s/Str
-   transactions :- TransactionSequence]
+   partition-name :- s/Str
+   transactions :- (TransactionSequence)]
   (d/create-database uri)
   (let [conn (d/connect uri)
+        partition-key (keyword partition-name "base-schema")
         ;; TODO: Generate this part using either schematode
         ;; or yuppiechef's library instead
         ;; Or maybe break down and set up my own data platform
-        norms-map {:fishfrog/base-schema {:txes [transactions]}}]
+        norms-map {partition-key {:txes [transactions]}}]
     ;; Returns nil on success
-    (conformity/ensure-conforms conn norms-map [:fishfrog/base-schema])))
+    (throw (ex-info "Start here" {:problem "No transactions provided for norm"}))
+    (conformity/ensure-conforms conn norms-map [partition-name])))
 
-(s/defn load-transactions-from-resource :- TxnDescrSeq
+(s/defn load-transactions-from-resource :- (TxnDescrSeq)
   [resource-name :- s/Str]
+  (println "Loading transactions from resource: '" resource-name "'")
   (util/load-resource resource-name))
 
 (s/defn expand-schema-descr
   "Isolating a helper function to start expanding attribute descriptions into transactions"
-  [descr :- AttrTxnDescrSeq]
+  [descr :- (AttrTxnDescrSeq)]
   (map (fn [[attr field-descrs]]
          ;; I'm duplicating some of the functionality from
          ;; Yuppiechef's library because he has it hidden
@@ -161,7 +167,7 @@ through generate-schema to generate actual transactions"
                 attrs))
   (generate-schema attrs {:index-all? true}))
 
-(s/defn expand-txn-descr :- TransactionSequence
+(s/defn expand-txn-descr :- (TransactionSequence)
   "Convert from a slightly-more-readable high-level description
 to the actual datastructure that datomic uses"
   [descr :- TxnDescrSeq]
@@ -177,23 +183,26 @@ to the actual datastructure that datomic uses"
 ;;; Public
 
 (s/defn install-schema!
-  [this :- DatabaseSchema]
+  [this :- (DatabaseSchema)
+   partition-name]
   (let [base-uri (:uri this)
         resource-name (:schema-resource-name this)]
-    (comment (log/debug "Installing schema for\n" (util/pretty this)
-                        "at" (util/pretty base-uri)
-                        "using" (-> base-uri :description :protocol)
-                        "\nfrom" resource-name))
+    (comment) (log/debug "Installing schema for\n" (util/pretty this)
+                         "at" (util/pretty base-uri)
+                         "using" (-> base-uri :description :protocol)
+                         "\nfrom" resource-name)
     (if-let [tx-description (load-transactions-from-resource resource-name)]
       (let [uri (-> this :uri :description db/build-connection-string)]
-        (comment (log/debug "Expanding high-level schema transaction description:\n"
-                            (util/pretty tx-description)
-                            "from" resource-name))
+        (comment) (log/debug "Expanding high-level schema transaction description:\n"
+                             (util/pretty tx-description)
+                             "from" resource-name)
         (let [[schema-tx primer-tx] (expand-txn-descr tx-description)]
-          (comment (log/debug "Setting up schema using\n"
-                              (util/pretty tx) "at\n" uri))
+          (comment) (log/debug "Setting up schema using\n"
+                               (util/pretty schema-tx) "at\n" uri
+                               "\nand priming with\n"
+                               (util/pretty primer-tx))
           (try
-            (s/validate TransactionSequence schema-tx)
+            (s/validate (TransactionSequence) schema-tx)
             (catch ExceptionInfo ex
               (log/error ex "Installing schema based on\n"
                          #_(util/pretty tx) schema-tx
@@ -203,8 +212,12 @@ to the actual datastructure that datomic uses"
                 (try
                   (s/validate IndividualTxn step)
                   (catch ExceptionInfo ex
-                    (log/error ex "Step:\n" step))))))
-          (do-schema-installation uri schema-tx)
+                    (log/error ex "Step:\n" step)))))
+            (catch Exception ex
+              (log/error ex "Low level schema installation error based on\n"
+                         schema-tx
+                         "\nwhich has" (count schema-tx) "members")))
+          (do-schema-installation uri partition-name schema-tx)
 
           ;; This has to happen as a Step 2:
           ;; We can't assign attributes to entities until
@@ -214,7 +227,7 @@ to the actual datastructure that datomic uses"
               :resource-name (:schema-resource-name this)
               :keys (keys this)}))))
 
-(s/defn ctor :- DatabaseSchema
+(s/defn ctor :- (DatabaseSchema)
   [config]
   ;; Because I'm just using a plain hashmap for now
   (comment (map->DatabaseSchema config))
