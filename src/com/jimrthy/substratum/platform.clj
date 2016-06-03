@@ -122,10 +122,10 @@
         ;; TODO: Generate this part using either schematode
         ;; or yuppiechef's library instead
         ;; Or maybe break down and set up my own data platform
-        norms-map {partition-key {:txes [transactions]}}]
+        norms-map {partition-key {:txes [(vec transactions)]}}]
     ;; Returns nil on success
-    (throw (ex-info "Start here" {:problem "No transactions provided for norm"}))
-    (conformity/ensure-conforms conn norms-map [partition-name])))
+    (println "Conforming" conn "at" uri "\nto\n" norms-map "\nin" partition-name)
+    (conformity/ensure-conforms conn norms-map [partition-key])))
 
 (s/defn load-transactions-from-resource :- (TxnDescrSeq)
   [resource-name :- s/Str]

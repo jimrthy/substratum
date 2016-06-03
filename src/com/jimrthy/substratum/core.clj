@@ -25,7 +25,7 @@
 
 (defn base-uri-description
   []
-  {:name s/Str
+  {:db-name s/Str
    :protocol (protocols)})
 
 (def in-memory-uri-description base-uri-description)
@@ -148,7 +148,9 @@ if it doesn't already exast and cache the connection"
   (str "datomic:free://" host ":" port "/" db-name))
 
 (s/defmethod build-connection-string :ram :- s/Str
-  [{:keys [db-name]}]
+  [{:keys [db-name] :as args}]
+  (when-not db-name
+    (throw (ex-info "Missing database name" args)))
   (str "datomic:mem://" db-name))
 
 (s/defn sql-driver :- s/Str

@@ -35,8 +35,11 @@
 (defn system-for-testing
   []
   (let [base-system (cpt-dsl/ctor "admin.test-system.edn")]
-    (assoc base-system :database-uri (db/uri-ctor {:description {:name (gensym)
+    (assoc base-system :database-uri (db/uri-ctor {:description {:db-name (gensym)
                                                                  :protocol :ram}}))))
+(comment
+  (let [tester (system-for-testing)]
+    (println (keys tester))))
 
 (defn in-mem-db-system
   "The really annoying thing about this approach is that I
@@ -48,6 +51,7 @@ can't just call the individual tests manually"
       ;; TODO: Add test features
       (try
         (let [started-system (component/start pre-testable-system)]
+          (println "Started System:" (map (partial str "\n") started-system) \newline)
           (try
             (alter-var-root #'system (constantly started-system))
             (f)
@@ -267,7 +271,12 @@ But, seriously. I had to start somewhere."
     ;; us start rocking and rolling with our kick-ass
     ;; Data Platform.
     ;; Q: What next?
+    ;; A: Verify at least some of its attributes
     (is false "Do something useful with this")))
+(comment
+  *ns*
+  ;; This is how that test gets run
+  (in-mem-db-system data-platform-basics))
 
 ;;; This is what the attribute-expansion test below amounts to
 (comment (let [baseline [(schema dt (fields [dt :ref "Think of an object's class"]
