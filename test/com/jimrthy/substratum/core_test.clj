@@ -6,7 +6,7 @@
            [com.stuartsierra.component :as component]))
 
 (deftest memory-basics
-  (let [uri-description {:name (gensym "core-memory-test-basics")
+  (let [uri-description {:db-name (str (gensym "core-memory-test-basics"))
                          :protocol :ram}
         disconnected (uri-ctor {:description uri-description})
         started (component/start disconnected)

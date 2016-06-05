@@ -105,12 +105,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
 
-(s/defn ^:always-validate obsolete-transact-schema! :- db/TransactionResult
-  [conn :- datomic.peer.LocalConnection
-   txns :- [(s/either (SchemaTransaction) (PartitionTransaction))]]
-  (raise {:obsolete "Use do-schema-installation instead"})
-  @(d/transact conn txns))
-
 (s/defn ^:always-validate do-schema-installation
   "Add schema/partition"
   [uri :- s/Str
@@ -182,9 +176,9 @@ to the actual datastructure that datomic uses"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public
 
-(s/defn install-schema!
+(s/defn ^:always-validate install-schema!
   [this :- (DatabaseSchema)
-   partition-name]
+   partition-name :- s/Str]
   (let [base-uri (:uri this)
         resource-name (:schema-resource-name this)]
     (comment) (log/debug "Installing schema for\n" (util/pretty this)

@@ -35,7 +35,7 @@
 (defn system-for-testing
   []
   (let [base-system (cpt-dsl/ctor "admin.test-system.edn")]
-    (assoc base-system :database-uri (db/uri-ctor {:description {:db-name (gensym)
+    (assoc base-system :database-uri (db/uri-ctor {:description {:db-name (str (gensym))
                                                                  :protocol :ram}}))))
 (comment
   (let [tester (system-for-testing)]
@@ -230,9 +230,12 @@ But, seriously. I had to start somewhere."
           (is (nil? cause-of-root))
           (is (= (:class root-details) Exceptions$IllegalArgumentExceptionInfo))
           (is (= ":db.error/not-an-entity Unable to resolve entity: :dt/dt" (:message root-details))))
-        (let [migration-ret-val
+        (let [migration-success
               (platform/do-schema-installation cxn-str "silly-test" structural-txn)]
-          (is (not migration-ret-val)))
+          ;; This is actually a map with some meaningful info. Should probably double-check
+          ;; that it matches what we expect.
+          ;; Then again, that's really unit-testing conformity, which is silly.
+          (is migration-success))
         (is (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt))
         (let [datatypes (db/q sql cxn-str)]
           (is (= #{} datatypes)))
@@ -258,21 +261,26 @@ But, seriously. I had to start somewhere."
         conn (d/connect cxn-str)]
     (is (not (conformity/has-attribute? (d/db conn) :dt/dt)))
     (let [schema-cpt (:database-schema system)]
-      (platform/install-schema! "edn-test" schema-cpt))
+      (platform/install-schema! schema-cpt "edn-test"))
     (is (conformity/has-attribute? (d/db conn) :dt/dt))))
 
 (deftest data-platform-basics
   []
-  (let [cxn-str (extract-connection-string)
-        conn (d/connect cxn-str)]
-    (let [schema-cpt (:database-schema system)]
-      (platform/install-schema! schema-cpt "testing-platform-basics"))
-    ;; OK, we should have everything set up to let
-    ;; us start rocking and rolling with our kick-ass
-    ;; Data Platform.
-    ;; Q: What next?
-    ;; A: Verify at least some of its attributes
-    (is false "Do something useful with this")))
+  (testing "Basic data platform installation"
+      (let [cxn-str (extract-connection-string)
+            conn (d/connect cxn-str)]
+        (testing "No interesting attributes, pre-install"
+          (is (not (conformity/has-attribute? (d/db conn) :dt/dt))))
+        (let [schema-cpt (:database-schema system)]
+          (platform/install-schema! schema-cpt "testing-platform-basics"))
+        ;; OK, we should have everything set up to let
+        ;; us start rocking and rolling with our kick-ass
+        ;; Data Platform.
+        (testing "Verifying test platform attributes installed"
+          (testing "No interesting attributes, pre-install"
+            ;; TODO: Test the others
+            ;; Actually, want a sequence of them to test, both before and after
+            (is (conformity/has-attribute? (d/db conn) :dt/dt)))))))
 (comment
   *ns*
   ;; This is how that test gets run
