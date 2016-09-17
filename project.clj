@@ -1,15 +1,17 @@
 (defproject com.jimrthy.substratum "0.1.0-SNAPSHOT"
-  :dependencies [[com.datomic/datomic-free "0.9.5394" :exclusions [com.google.guava/guava]]
+  :dependencies [[com.datomic/datomic-free "0.9.5394"]
                  ;; Since this is supposed to be a library,
                  ;; I really shouldn't even depend on either
                  ;; of these
-                 [com.jimrthy/component-dsl "0.1.1-SNAPSHOT"]
+                 [com.jimrthy/component-dsl "0.1.2-SNAPSHOT"  :exclusions [com.google.guava/guava]]
                  [com.stuartsierra/component "0.3.1"]
                  ;; This really doesn't seem worth including
+                 ;; TODO: Make it go away.
                  [com.taoensso/timbre "4.7.4"]
                  ;; Q: How much value-add do I get here?
                  [datomic-schema "1.3.0"]
                  ;; This seems even worse
+                 ;; TODO: Definitely need to make it go away
                  [im.chit/hara.event "2.4.4"]
                  ;; This seems very debatable
                  ;; End-users probably need to be responsible
