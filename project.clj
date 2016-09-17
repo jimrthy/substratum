@@ -1,16 +1,16 @@
 (defproject com.jimrthy.substratum "0.1.0-SNAPSHOT"
-  :dependencies [[com.datomic/datomic-free "0.9.5372" :exclusions [com.google.guava/guava]]
+  :dependencies [[com.datomic/datomic-free "0.9.5394" :exclusions [com.google.guava/guava]]
                  ;; Since this is supposed to be a library,
                  ;; I really shouldn't even depend on either
                  ;; of these
                  [com.jimrthy/component-dsl "0.1.1-SNAPSHOT"]
                  [com.stuartsierra/component "0.3.1"]
                  ;; This really doesn't seem worth including
-                 [com.taoensso/timbre "4.3.1"]
+                 [com.taoensso/timbre "4.7.4"]
                  ;; Q: How much value-add do I get here?
                  [datomic-schema "1.3.0"]
                  ;; This seems even worse
-                 [im.chit/hara.event "2.3.7"]
+                 [im.chit/hara.event "2.4.4"]
                  ;; This seems very debatable
                  ;; End-users probably need to be responsible
                  ;; for their own data migration paths
@@ -24,10 +24,8 @@
                  ;; for others after it's useful for me.
                  ;; So just port what I've already written.
                  [io.rkn/conformity "0.4.0"]
-                 [org.clojure/clojure "1.8.0"]
-                 [org.clojure/core.async "0.2.374"]
-                 ;; I even have my doubts about this
-                 [prismatic/schema "1.1.1"]]
+                 [org.clojure/clojure "1.9.0-alpha11"]
+                 [org.clojure/core.async "0.2.391"]]
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}

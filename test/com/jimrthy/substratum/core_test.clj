@@ -1,6 +1,6 @@
 (ns com.jimrthy.substratum.core-test
   "Test core database functionality"
-  (require [clojure.test :refer [deftest is testing] :as test]
+  (:require [clojure.test :refer (deftest is testing) :as test]
            [com.jimrthy.substratum.core :refer :all]
            ;; TODO: Convert this to component-dsl
            [com.stuartsierra.component :as component]))
