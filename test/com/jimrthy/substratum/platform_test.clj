@@ -1,19 +1,19 @@
 (ns com.jimrthy.substratum.platform-test
   "Unit testing the database is generally considered a bad idea, but I have to start somewhere"
-  (:require [clojure.pprint :refer [pprint]]
-            [clojure.test :refer [are deftest is testing use-fixtures]]
+  (:require [clojure.pprint :refer (pprint)]
+            [clojure.test :refer (are deftest is testing use-fixtures)]
             [com.jimrthy.substratum.core :as db]
             [com.jimrthy.substratum.platform :as platform]
             [com.jimrthy.substratum.util :as util]
             [com.stuartsierra.component :as component]
             [component-dsl.system :as cpt-dsl]
             [datomic.api :as d]
-            [datomic-schema.schema :refer [defdbfn
-                                           fields
-                                           generate-parts
-                                           generate-schema
-                                           part
-                                           schema]]
+            [datomic-schema.schema :refer (defdbfn
+                                            fields
+                                            generate-parts
+                                            generate-schema
+                                            part
+                                            schema)]
             [io.rkn.conformity :as conformity]
             [taoensso.timbre :as log])
   (:import [clojure.lang ExceptionInfo IExceptionInfo]
@@ -31,10 +31,12 @@
 ;;; Boilerplate
 
 (defn system-for-testing
+  "Note that these are simulating records. Which means the keys can't be namespaced"
   []
-  (let [base-system (cpt-dsl/ctor "admin.test-system.edn")]
-    (assoc base-system :database-uri (db/uri-ctor {:description {:db-name (str (gensym))
-                                                                 :protocol :ram}}))))
+  (let [base-system (cpt-dsl/ctor "admin.test-system.edn")
+        uri (db/uri-ctor {:description {:db-name (str (gensym))
+                                        :protocol :ram}})]
+    (assoc base-system :database-uri uri)))
 (comment
   (let [tester (system-for-testing)]
     (println (keys tester))))
@@ -61,23 +63,31 @@ can't just call the individual tests manually"
                 (alter-var-root #'system (constantly stopped))))))
         (catch RuntimeException ex
           (log/error ex "Setting up baseline admin system"))))))
-
 (use-fixtures :each in-mem-db-system)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
 
+;; TODO: ^:always-check
+(s/fdef extract-connection-string
+        :args (s/cat)
+        :ret string?)
 (defn extract-connection-string
+  "Pull the connection string from the system."
   []
   {:post [string?]}
-  (-> system :database-uri :connection-string))
+  (let [dscr (-> system :database-uri :description)
+        result (db/build-connection-string dscr)]
+    result))
 
 (defn test-partition
   []
   [(part "test")])
 
 (defn base-datatype-schema-txn
-  "In reality, this should be loaded from EDN"
+  "In reality, this should be loaded from some config file, like EDN
+
+(or even another database, though that approach gets strange quickly)"
   []
   [(schema dt
            (fields
@@ -109,10 +119,14 @@ can't just call the individual tests manually"
      (generate-schema schema {:index-all? true}))))
 
 (defn base-datatype-query
+  "Find the entities with datatype datatype
+
+(equivalent to the root Object in most OO systems)"
   []
   '{:find [?e]
     :where [[?e :dt/dt :dt/dt]]})
 
+;; Compare 2 transactions
 (comment (let [lhs {:db/doc "N-d sequences",
                     :db/index true,
                     :db.install/_attribute :db.part/db,
@@ -170,6 +184,11 @@ and vice versa"
                          :rhs s2})))))
   (doseq [rhs s2]
     (let [matches
+          ;;; Should be able to just do
+          ;;; (filter #(= (dissoc rhs :db/id) (dissoc % :db/id)))
+          ;;; instead.
+          ;;; And the same for the matching check directly above.
+          ;;; TODO: Verify this and switch to the shorter version
           (filter identity (map (fn [lhs]
                                   (when (= (dissoc lhs :db/id)
                                            (dissoc rhs :db/id))
@@ -183,17 +202,6 @@ and vice versa"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Actual Tests
-
-(deftest basic-structure
-  "Because I have to start somewhere...does setup/teardown work?"
-  (is (= 2 2)))
-
-(deftest note-syntax
-  "Because I haven't played w/ are before"
-  (are [x y] (= 5 (+ x y))
-       2 3
-       1 4
-       6 -1))
 
 (deftest datatype-schema
   "Prove that I can I can add minimalist schema to the database
@@ -237,19 +245,26 @@ But, seriously. I had to start somewhere."
           (is (nil? cause-of-root))
           (is (= (:class root-details) Exceptions$IllegalArgumentExceptionInfo))
           (is (= ":db.error/not-an-entity Unable to resolve entity: :dt/dt" (:message root-details))))
+        (println "Getting ready to try to run conformity on:\n"
+                 structural-txn)
         (let [migration-success
               (platform/do-schema-installation cxn-str "silly-test" structural-txn)]
-          ;; This is actually a map with some meaningful info. Should probably double-check
-          ;; that it matches what we expect.
-          ;; Then again, that's really unit-testing conformity, which is silly.
-          (is migration-success))
-        (is (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt))
-        (let [datatypes (db/q sql cxn-str)]
-          (is (= #{} datatypes)))
-        (let [;; This does the deref for us
-              insertion (db/upsert! cxn-str initial-txn)]
+          (is migration-success)
+          ;; Digging into this level of detail is really unit-testing
+          ;; conformity. Which is worse than silly.
+          (doseq [result-detail migration-success]
+            (is (:tx-result result-detail))))
+
+        (testing ":dt/dt attribute added successfully"
+          (is (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt)))
+        (testing "No datatypes installed yet"
           (let [datatypes (db/q sql cxn-str)]
-            (is (= 1 (count datatypes))))))
+            (is (= 0 (count datatypes)))))
+        (testing "Defining 1 datatype"
+          (let [;; This does the deref for us
+                insertion (db/upsert! cxn-str initial-txn)]
+            (let [datatypes (db/q sql cxn-str)]
+              (is (= 1 (count datatypes)))))))
       (catch Throwable ex
         (throw (ex-info
                 (.getMessage ex)
@@ -259,25 +274,30 @@ But, seriously. I had to start somewhere."
                  :system system}))))))
 
 (deftest check-edn-install
-  "Make sure the schema.edn does what I expect"
-  []
-  (let [cxn-str (extract-connection-string)
-        ;; Really shouldn't be caching this,
-        ;; at least in theory. But it seems
-        ;; silly not to, in practice.
-        ;; It's not like I'm actively passing it around
-        ;; anywhere else
-        conn (d/connect cxn-str)]
-    (is (not (conformity/has-attribute? (d/db conn) :dt/dt)))
-    (let [uri (:database-uri system)
-          dscr {:uri uri
-                :schema-resource-name "test-schema.edn"
-                :partition-name "Basic EDN Installation"}]
-      (platform/install-schema-from-resource! dscr))
-    (is (conformity/has-attribute? (d/db conn) :dt/dt))))
+  (testing "Make sure the schema.edn does what I expect"
+    (let [cxn-str (extract-connection-string)
+          ;; Really shouldn't be caching this,
+          ;; at least in theory. But it seems
+          ;; silly not to, in practice.
+          ;; It's not like I'm actively passing it around
+          ;; anywhere else
+          conn (d/connect cxn-str)]
+      (when (conformity/has-attribute? (d/db conn) :dt/dt)
+        (throw (ex-info (str "Database at "
+                             cxn-str
+                             "\naka\n"
+                             (common/pretty uri-dscr)
+                             "\nalready has the :dt/dt attribute\n"
+                             "How did this happen?!")
+                        {:connection-string cxn-str
+                         :system system})))
+      (let [dscr {:uri (:database-uri system)
+                  :schema-resource-name "test-schema.edn"
+                  :partition-name "Basic EDN Installation"}]
+        (platform/install-schema-from-resource! dscr))
+      (is (conformity/has-attribute? (d/db conn) :dt/dt)))))
 
 (deftest data-platform-basics
-  []
   (testing "Basic data platform installation"
       (let [cxn-str (extract-connection-string)
             conn (d/connect cxn-str)]
@@ -292,7 +312,7 @@ But, seriously. I had to start somewhere."
         ;; us start rocking and rolling with our kick-ass
         ;; Data Platform.
         (testing "Verifying test platform attributes installed"
-          (testing "No interesting attributes, pre-install"
+          (testing "Have interesting attributes, post-install"
             ;; TODO: Test the others
             ;; Actually, want a sequence of them to test, both before and after
             (is (conformity/has-attribute? (d/db conn) :dt/dt)))))))
@@ -351,37 +371,30 @@ But, seriously. I had to start somewhere."
                (println (ex-data ex))))))
 
 (deftest attribute-expansion
-  "Yuppiechef uses macros.
-Translating them into functions that work on EDN
-hasn't been trivial"
-  []
-  (let [baseline [(schema dt (fields [dt :ref "Think of an object's class"]
-                                     [namespace :string "package"]
-                                     [name :string "getSimpleName"]
-                                     [parent :ref "super"]
-                                     [list :ref "N-d sequences"]
-                                     [component :ref "Type that list contains"]))
-                  (schema dt.any (fields [bigdec :bigdec]
-                                         [bigint :bigint]
-                                         [boolean :boolean]))]
-        canonical (generate-schema baseline
-                                   {:index-all? true})
-        my-description '{dt {dt [:ref #{"Think of an object's class"}]
-                             namespace [:string #{"package"}]
-                             name [:string #{"getSimpleName"}]
-                             parent [:ref #{"super"}]
-                             list [:ref #{"N-d sequences"}]
-                             component [:ref #{"Type that list contains"}]}
-                         dt.any {bigdec [:bigdec]
-                                 bigint [:bigint]
-                                 boolean [:boolean]}}
-        my-expansion (platform/expand-schema-descr my-description)
-        my-generation (platform/expanded-descr->schema my-expansion)]
-    (is (= baseline my-expansion))
-    (if (not= canonical my-generation)
-      (verify-same-elements canonical my-generation)
-      (is false "They can't be = due to tempids"))))
-
-;; I feel like I should be putting things into something like
-;; this, but this is really for sub-contexts inside a deftest
-(comment (testing "Does the schema manipulation make sense?"))
+  (testing "My translation of Yuppiechef macros into functions that work on EDN"
+    (let [baseline [(schema dt (fields [dt :ref "Think of an object's class"]
+                                       [namespace :string "package"]
+                                       [name :string "getSimpleName"]
+                                       [parent :ref "super"]
+                                       [list :ref "N-d sequences"]
+                                       [component :ref "Type that list contains"]))
+                    (schema dt.any (fields [bigdec :bigdec]
+                                           [bigint :bigint]
+                                           [boolean :boolean]))]
+          canonical (generate-schema baseline
+                                     {:index-all? true})
+          my-description '{dt {dt [:ref #{"Think of an object's class"}]
+                               namespace [:string #{"package"}]
+                               name [:string #{"getSimpleName"}]
+                               parent [:ref #{"super"}]
+                               list [:ref #{"N-d sequences"}]
+                               component [:ref #{"Type that list contains"}]}
+                           dt.any {bigdec [:bigdec]
+                                   bigint [:bigint]
+                                   boolean [:boolean]}}
+          my-expansion (platform/expand-schema-descr my-description)
+          my-generation (platform/expanded-descr->schema my-expansion)]
+      (is (= baseline my-expansion))
+      (if (not= canonical my-generation)
+        (verify-same-elements canonical my-generation)
+        (is false "They can't be = due to tempids")))))
