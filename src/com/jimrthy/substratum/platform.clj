@@ -1,6 +1,8 @@
 (ns com.jimrthy.substratum.platform
   "Based upon the 'Datomic as a Data Platform' talk by Antonio Andrade"
-  (:require [com.stuartsierra.component :as component]
+  (:require [clojure.spec :as s]
+            ;; Q: Really needed?
+            [com.stuartsierra.component :as component]
             [datomic.api :as d]
             [datomic-schema.schema :refer [defdbfn
                                            fields
@@ -12,13 +14,12 @@
             [com.jimrthy.substratum.util :as util]
             [hara.event :refer [raise]]
             [io.rkn.conformity :as conformity]
-            [schema.core :as s]
+            ;; TODO: Make this go away
             [taoensso.timbre :as log])
-  (:import [clojure.lang ExceptionInfo]
-           [com.jimrthy.substratum.core URL]))
+  (:import [clojure.lang ExceptionInfo]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Prismatic Schema
+;;; Specs
 
 ;; Q: Is there anything to do w/ startup/shutdown?
 (comment (s/defrecord DatabaseSchema [schema-resource-name :- s/Str
@@ -29,12 +30,14 @@
             (raise :not-implemented))
            (stop
             [this]
-            (raise :not-implemented))))
+             (raise :not-implemented))))
+(s/def ::schema-resource-name string?)
 ;; A: Until there is, just use a plain hashmap
-(defn DatabaseSchema []
-  {:schema-resource-name s/Str
-   :uri URL})
+(s/def ::database-schema (s/keys :req [::schema-resource-name :com.jimrthy.substratum.core/uri]))
 
+;; Q: Haven't I already translated these fundamental schemas into specs for
+;; frereth-server?
+;; TODO: Verify that and then start on these
 (defn uniqueness []
   (s/enum :db.unique/identity  ; attempts to insert dupe value for different entity will fail
           :db.unique/value))   ; attempts to insert dupe value for entity w/ tempid will merge existing entity

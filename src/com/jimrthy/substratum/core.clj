@@ -74,7 +74,7 @@
 (s/def ::where ::where-clause)
 (s/def ::in (s/coll-of symbol?))
 (s/def ::datomic-query (s/keys :req-un [::find ::where]
-                               :opt-un ::in))
+                               :opt-un [::in]))
 
 ;; Q: Do I need to create a db namespace for this?
 (s/def :db/id (s/or :id #(instance? DbId %)
@@ -97,7 +97,7 @@
 
 (s/def ::db-before #(instance? Db %))
 (s/def ::db-after #(instance? Db %))
-(s/def ::tx-data (s/coll-of #(instance? Datom ?)))
+(s/def ::tx-data (s/coll-of #(instance? Datom %)))
 (s/def ::temp-ids (s/map-of integer? integer?))
 (s/def ::transaction-result (s/keys :req-un [::db-before ::db-after ::tx-data ::temp-ids]))
 
@@ -107,26 +107,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
-
-;;; Printing helpers.
-;;; TODO: These really belong in their own namespace.
-;;; Or, at least, not in this one
-;;; Q: Should they really be calling print??
-
-(defmethod io.aviso.exception/exception-dispatch URL
-  [url]
-  (print "<#URL" (:connection-string url) ">"))
-
-(defmethod io.aviso.exception/exception-dispatch DbId
-  [db-id]
-  ;; This is super cheesy. But I need something to keep
-  ;; my error reporting about it from throwing another exception
-  (print "<#DbId" (str db-id) ">"))
-
-(defmethod io.aviso.exception/exception-dispatch schema.core.Either
-  [either]
-  ;; It's tough to fathom that this doesn't have a good default printer
-  (print "(schema.core/either" (:schemas either) ")"))
 
 (defmethod build-connection-string-types ::free
   [_]
@@ -138,7 +118,7 @@
          port 4334}}]
   (str "datomic:free://" host ":" port "/" db-name))
 
-(defmethod build-connection-string-type ::ram
+(defmethod build-connection-string-types ::ram
   [_]
   ::in-memory-uri-description)
 (defmethod build-connection-string :ram
@@ -240,6 +220,21 @@ if it doesn't already exast and cache the connection"
    ;; from the mailing list
    (assoc this :connection-string nil)))
 
+;;; Printing helpers.
+;;; TODO: These really belong in their own namespace.
+;;; Or, at least, not in this one
+;;; Q: Should they really be calling print??
+
+(defmethod io.aviso.exception/exception-dispatch URL
+  [url]
+  (print "<#URL" (:connection-string url) ">"))
+
+(defmethod io.aviso.exception/exception-dispatch DbId
+  [db-id]
+  ;; This is super cheesy. But I need something to keep
+  ;; my error reporting about it from throwing another exception
+  (print "<#DbId" (str db-id) ">"))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public
 
@@ -286,7 +281,7 @@ var lookup"
 (s/fdef upsert!
         :args (s/cat :uri ::connection-string
                      :txns (s/coll-of ::upsert-transaction))
-        :ret ::tranaction-result)
+        :ret ::transaction-result)
 (defn upsert!
   [uri txns]
   (let [conn (d/connect uri)]

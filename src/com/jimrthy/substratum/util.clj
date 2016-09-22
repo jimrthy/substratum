@@ -1,18 +1,17 @@
 (ns com.jimrthy.substratum.util
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
-            [clojure.pprint :refer [pprint]]
-            [schema.core :as s])
+            [clojure.pprint :refer (pprint)]
+            [clojure.spec :as s])
   (:import [java.util Date UUID]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Schema
+;;; Specs
 
-(def async-channel (class (async/chan)))
+(def async-channel-type (class (async/chan)))
+(s/def ::async-channel #(instance? async-channel-type %))
 (def java-byte-array (Class/forName "[B"))
-;; FIXME: This should probably come from something like
-;; simple-time instead
-(def time-stamp Date)
+(s/def ::java-byte-array #(instance? java-byte-array %))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
@@ -20,41 +19,57 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public
 
-(s/defn ^:always-validate load-resource
-  [url :- s/Str]
+(s/fdef load-resource
+        ;; Q: Can I get any more specific than this?
+        :args (s/cat :url string?)
+        :ret any?)
+(defn load-resource
+  [url]
   (-> url
       clojure.java.io/resource
       slurp
       edn/read-string))
 
+(s/fdef now
+        :args (s/cat)
+        :ret inst?)
 (defn now
   "According to SO, this is the idiomatic way to get the current time."
   []
-  (java.util.Date.))
+  (Date.))
 
-(defn log
+(defn log!
   "Persist o for future reference.
-  Really should do something more involved."
-  [o]
-  (throw (ex-info "Obsolete" {:todo "Switch to timbre instead"}))
-  (let* [now (now)
-         msg (format "%tH:%tM:%tS.%tL - %s%n" now now now now (str o))]
-    (spit "event.log" msg :append true)
-    msg))
+  Really should do something more involved.
+  Then again...we have commons-logging, log4j, and jboss.logging all available.
+  Which means this should probably just go away."
+  ([file-name o]
+   (let* [now (now)
+          msg (format "%tH:%tM:%tS.%tL - %s%n" now now now now (str o))]
+     (spit file-name msg :append true)
+     msg))
+  ([o]
+   (log! "substratum.log" o)))
 
-;;; Do some brain-dead XML processing
 (defn extract-from-node
-  "This is brutal and inefficient...aside from being incorrect.
-  Multiple instances of the same key will hide each other"
+  "Find the first (depth-first) child of node that matches key.
+
+In some way that might or might not involve the attributes.
+
+This needs some serious attention/deletion, but that needs to happen
+some other day.
+
+TODO: Sort this out and hopefully just make it go away."
   [key node]
   (first (for [child node]
-           (let [attributes (child :attrs)]
-             (if (child key)
-               (child key)
-               (extract-from-node key (child :content)))))))
+           (let [attributes (:attrs child)]
+             (or (child key)
+                 (extract-from-node key (:content child)))))))
 
 (defn extract-named-node
-  "Note that this does no descent
+  "This is another function that needs some thorough consideration.
+
+Note that this does no descent
 That comment seems like a lie"
   [node]
   (loop [car (first node) cdr (rest node)]
@@ -67,11 +82,28 @@ That comment seems like a lie"
   [o]
   (with-out-str (pprint o)))
 
-(s/defn random-uuid :- UUID
+(s/fdef random-uuid
+        :args (s/cat)
+        :ret uuid?)
+(defn random-uuid
   []
   (UUID/randomUUID))
 
-(s/defn walk-iterator
+(s/fdef walk-iterator
+        :args (s/cat :f (s/fspec :args (s/cat :x any?)
+                                 :ret any?)
+                     ;; There really isn't any point unless this is a java.util.Collection
+                     :it (s/coll-of any?))
+        ;; TODO: Add a :fn spec.
+        ;; The spec for :it matches :f's :x spec.
+        ;; (= (-> % :args :f :ret ::spec)
+        ;;    (-> % :ret contained-spec))
+        ;; and
+        #_ (= (-> % :args :it count)
+              (-> % :ret count))
+        ;; although that latter screws up any hope of laziness
+        :ret (s/coll-of any?))
+(defn walk-iterator
   "Like mapv over a java collection
 
 Q: Is something like this handled in, say, flatland/useful?
@@ -85,7 +117,7 @@ But I'm running into a case specifically where
 map is throwing
 IllegalArgumentException Don't know how to create ISeq from: java.util.Collections$UnmodifiableCollection$1  clojure.lang.RT.seqFrom (RT.java:528)"
   [f
-   it :- java.util.Collection]
+   it]
   (loop [result []]
     (if (.hasNext it)
       (let [x (.next it)
