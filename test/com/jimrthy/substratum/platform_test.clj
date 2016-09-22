@@ -15,8 +15,6 @@
                                            part
                                            schema]]
             [io.rkn.conformity :as conformity]
-            [hara.event :refer [raise]]
-            [schema.core :as s]
             [taoensso.timbre :as log])
   (:import [clojure.lang ExceptionInfo IExceptionInfo]
            [datomic.impl Exceptions$IllegalArgumentExceptionInfo]))
@@ -69,8 +67,9 @@ can't just call the individual tests manually"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
 
-(s/defn ^:always-check extract-connection-string :- s/Str
+(defn extract-connection-string
   []
+  {:post [string?]}
   (-> system :database-uri :connection-string))
 
 (defn test-partition
@@ -139,20 +138,24 @@ and vice versa"
   ;; First, check for duplicates
   (let [set1 (set s1)]
     (when (not= (count set1) (count s1))
-      (raise {:duplicate-entry s1})))
+      (throw (ex-info "duplicate-entry" {:problem s1}))))
   (let [set2 (set s2)]
     (when (not= (count set2) (count s2))
-      (raise {:duplicate-entry s2})))
+      (throw (ex-info "duplicate-entry" {:problem s2}))))
 
   ;; Then check for exclusions
   ;; This approach isn't valid.
   ;; The tempid should definitely not be the same
   (comment (doseq [lhs s1]
              (when-not (some #(= lhs %) s2)
-               (raise {:rhs-missing lhs})))
+               (throw (ex-info "Missing entry" {:rhs-missing lhs
+                                                :rhs-has s2
+                                                :lhs-has s1}))))
            (doseq [rhs s2]
              (when-not (some #(= rhs %) s1)
-               (raise {:lhs-missing rhs}))))
+               (throw (ex-info "Missing entry" {:lhs-missing rhs
+                                                :lhs-has s1
+                                                :rhs-has s2})))))
   (doseq [lhs s1]
     (let [matches
           (filter identity (map (fn [rhs]
@@ -161,8 +164,10 @@ and vice versa"
                                     true))
                                 s2))]
       (when (not= 1 (count matches))
-        (raise {:wrong-left-hand-match lhs
-                :matches matches}))))
+        (throw (ex-info "Not a unique match"
+                        {:wrong-left-hand-match lhs
+                         :matches matches
+                         :rhs s2})))))
   (doseq [rhs s2]
     (let [matches
           (filter identity (map (fn [lhs]
@@ -171,8 +176,10 @@ and vice versa"
                                     true))
                                 s1))]
       (when (not= 1 (count matches))
-        (raise {:wrong-right-hand-match rhs
-                :matches matches})))))
+        (throw (ex-info "Not a unique match"
+                        {:wrong-right-hand-match rhs
+                         :matches matches
+                         :lhs s1}))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Actual Tests
@@ -244,10 +251,12 @@ But, seriously. I had to start somewhere."
           (let [datatypes (db/q sql cxn-str)]
             (is (= 1 (count datatypes))))))
       (catch Throwable ex
-        (raise {:unexpected ex
-                :connection-string cxn-str
-                :query sql
-                :system system})))))
+        (throw (ex-info
+                (.getMessage ex)
+                {:unexpected ex
+                 :connection-string cxn-str
+                 :query sql
+                 :system system}))))))
 
 (deftest check-edn-install
   "Make sure the schema.edn does what I expect"
@@ -260,9 +269,13 @@ But, seriously. I had to start somewhere."
         ;; anywhere else
         conn (d/connect cxn-str)]
     (is (not (conformity/has-attribute? (d/db conn) :dt/dt)))
-    (let [schema-cpt (:database-schema system)]
-      (platform/install-schema! schema-cpt "edn-test"))
-    (is (conformity/has-attribute? (d/db conn) :dt/dt))))
+    (let [uri (:database-uri system)
+          dscr {:uri uri
+                :schema-resource-name "test-schema.edn"
+                :partition-name "Basic EDN Installation"}]
+      (platform/install-schema-from-resource! dscr))
+    (is (conformity/has-attribute? (d/db conn) :dt/dt))
+    (throw (ex-info "Start here" {:problem "That just failed"}))))
 
 (deftest data-platform-basics
   []
@@ -271,8 +284,11 @@ But, seriously. I had to start somewhere."
             conn (d/connect cxn-str)]
         (testing "No interesting attributes, pre-install"
           (is (not (conformity/has-attribute? (d/db conn) :dt/dt))))
-        (let [schema-cpt (:database-schema system)]
-          (platform/install-schema! schema-cpt "testing-platform-basics"))
+        (let [uri (:database-uri system)
+              dscr {:uri uri
+                    :schema-resource-name #_"testing-platform-basics" "test-schema.edn"
+                    :partition-name "Data Platform Basics"}]
+          (platform/install-schema-from-resource! dscr))
         ;; OK, we should have everything set up to let
         ;; us start rocking and rolling with our kick-ass
         ;; Data Platform.
@@ -280,7 +296,9 @@ But, seriously. I had to start somewhere."
           (testing "No interesting attributes, pre-install"
             ;; TODO: Test the others
             ;; Actually, want a sequence of them to test, both before and after
-            (is (conformity/has-attribute? (d/db conn) :dt/dt)))))))
+            (is (conformity/has-attribute? (d/db conn) :dt/dt))
+            (throw (ex-info "Start here too"
+                            {:problem "That test also failed"})))))))
 (comment
   *ns*
   ;; This is how that test gets run
