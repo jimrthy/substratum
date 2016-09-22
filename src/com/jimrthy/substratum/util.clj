@@ -3,7 +3,7 @@
             [clojure.edn :as edn]
             [clojure.pprint :refer (pprint)]
             [clojure.spec :as s])
-  (:import [java.util Date UUID]))
+  (:import [java.util Iterator Date UUID]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specs
@@ -117,7 +117,7 @@ But I'm running into a case specifically where
 map is throwing
 IllegalArgumentException Don't know how to create ISeq from: java.util.Collections$UnmodifiableCollection$1  clojure.lang.RT.seqFrom (RT.java:528)"
   [f
-   it]
+   ^Iterator it]
   (loop [result []]
     (if (.hasNext it)
       (let [x (.next it)

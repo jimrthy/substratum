@@ -31,5 +31,6 @@
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :profiles {:dev {:resource-paths ["dev-resources"]}}
+  :profiles {:dev {:resource-paths ["dev-resources"]
+                   :source-paths ["dev"]}}
   :url "https://github.com/jimrthy/substratum")
