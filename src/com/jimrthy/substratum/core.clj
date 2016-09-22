@@ -1,5 +1,9 @@
 (ns com.jimrthy.substratum.core
-  "Core database functionality"
+  "Core database functionality
+
+There might be some justification for splitting some of these
+pieces from platform. But anything I don't move into there should
+probably get moved into, say, _impl"
   (:require [clojure.spec :as s]
             [com.jimrthy.substratum.util :as util]
             [com.stuartsierra.component :as component]

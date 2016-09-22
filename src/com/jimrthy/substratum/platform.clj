@@ -64,7 +64,7 @@
 (s/def :db/unique ::uniqueness)
 
 ;;; For adding schema
-(s/def ::schema-transaction (s/merge :com.frereth.server.db.core/base-transaction
+(s/def ::schema-transaction (s/merge :com.jimrthy.substratum.core/base-transaction
                                      (s/keys :req [:db/ident
                                                    :db/cardinality
                                                    :db/valueType
@@ -86,14 +86,14 @@
 
 (s/def :db.install/_partition #(= :db.part/db %))
 ;; This could be done as two steps in one transaction...but why?
-(s/def ::partition-transaction (s/merge :com.frereth.server.db.core/base-transaction
+(s/def ::partition-transaction (s/merge :com.jimrthy.substratum.core/base-transaction
                                         (s/keys :req [:db/ident
                                                       :db.install/_partition])))
 
 (s/def ::individual-txn (s/or ::schema-transaction
                               ::partition-transaction
-                              :com.frereth.server.db.core/upsert-transaction
-                              :com.frereth.server.db.core/retract-txn))
+                              :com.jimrthy.substratum.core/upsert-transaction
+                              :com.jimrthy.substratum.core/retract-txn))
 (s/def ::transaction-sequence (s/coll-of ::individual-txn))
 
 ;; Really just a sequence of names
@@ -249,6 +249,10 @@ through generate-schema to generate actual transactions"
   "Convert from a slightly-more-readable high-level description
 to the actual datastructure that datomic uses"
   [descr]
+  (println "Expanding Transaction Description:\n"
+           (util/pretty descr)
+           "with keys:"
+           (keys descr))
   (let [parts (map yuppie-schema/part #_(first descr) (:partitions descr))
         attrs (expand-schema-descr #_(second descr) (:attribute-types descr))
         generated-schema (expanded-descr->schema attrs)

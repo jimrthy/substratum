@@ -274,8 +274,7 @@ But, seriously. I had to start somewhere."
                 :schema-resource-name "test-schema.edn"
                 :partition-name "Basic EDN Installation"}]
       (platform/install-schema-from-resource! dscr))
-    (is (conformity/has-attribute? (d/db conn) :dt/dt))
-    (throw (ex-info "Start here" {:problem "That just failed"}))))
+    (is (conformity/has-attribute? (d/db conn) :dt/dt))))
 
 (deftest data-platform-basics
   []
@@ -296,13 +295,12 @@ But, seriously. I had to start somewhere."
           (testing "No interesting attributes, pre-install"
             ;; TODO: Test the others
             ;; Actually, want a sequence of them to test, both before and after
-            (is (conformity/has-attribute? (d/db conn) :dt/dt))
-            (throw (ex-info "Start here too"
-                            {:problem "That test also failed"})))))))
+            (is (conformity/has-attribute? (d/db conn) :dt/dt)))))))
 (comment
   *ns*
   ;; This is how that test gets run
-  (in-mem-db-system data-platform-basics))
+  (in-mem-db-system data-platform-basics)
+  )
 
 ;;; This is what the attribute-expansion test below amounts to
 (comment (let [baseline [(schema dt (fields [dt :ref "Think of an object's class"]
