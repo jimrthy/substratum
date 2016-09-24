@@ -1,6 +1,7 @@
 (ns com.jimrthy.substratum.platform-test
   "Unit testing the database is generally considered a bad idea, but I have to start somewhere"
   (:require [clojure.pprint :refer (pprint)]
+            [clojure.spec :as s]
             [clojure.test :refer (are deftest is testing use-fixtures)]
             [com.jimrthy.substratum.core :as db]
             [com.jimrthy.substratum.platform :as platform]
@@ -285,8 +286,6 @@ But, seriously. I had to start somewhere."
       (when (conformity/has-attribute? (d/db conn) :dt/dt)
         (throw (ex-info (str "Database at "
                              cxn-str
-                             "\naka\n"
-                             (common/pretty uri-dscr)
                              "\nalready has the :dt/dt attribute\n"
                              "How did this happen?!")
                         {:connection-string cxn-str

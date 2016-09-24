@@ -90,10 +90,10 @@
                                         (s/keys :req [:db/ident
                                                       :db.install/_partition])))
 
-(s/def ::individual-txn (s/or ::schema-transaction
-                              ::partition-transaction
-                              :com.jimrthy.substratum.core/upsert-transaction
-                              :com.jimrthy.substratum.core/retract-txn))
+(s/def ::individual-txn (s/or :schema ::schema-transaction
+                              :parts ::partition-transaction
+                              :upsert :com.jimrthy.substratum.core/upsert-transaction
+                              :retract :com.jimrthy.substratum.core/retract-txn))
 (s/def ::transaction-sequence (s/coll-of ::individual-txn))
 
 ;; Really just a sequence of names
