@@ -8,7 +8,6 @@ probably get moved into, say, _impl"
             [com.jimrthy.substratum.util :as util]
             [com.stuartsierra.component :as component]
             [datomic.api :as d]
-            [hara.event :refer [raise]]
             [taoensso.timbre :as log])
   (:import [datomic Datom]
            [datomic.db Db DbId]))

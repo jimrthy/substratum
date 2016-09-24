@@ -10,9 +10,6 @@
                  [com.taoensso/timbre "4.7.4"]
                  ;; Q: How much value-add do I get here?
                  [datomic-schema "1.3.0"]
-                 ;; This seems even worse
-                 ;; TODO: Definitely need to make it go away
-                 [im.chit/hara.event "2.4.4"]
                  ;; This seems very debatable
                  ;; End-users probably need to be responsible
                  ;; for their own data migration paths
