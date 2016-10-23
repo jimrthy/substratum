@@ -54,6 +54,8 @@
 (defn extract-from-node
   "Find the first (depth-first) child of node that matches key.
 
+Where node is really a DOM element.
+
 In some way that might or might not involve the attributes.
 
 This needs some serious attention/deletion, but that needs to happen

@@ -1,5 +1,5 @@
 (ns com.jimrthy.substratum.core-test
-  "Test core database functionality"
+  "Pretty much pointless, but it verifies that test harness works"
   (:require [clojure.test :refer (deftest is testing) :as test]
            [com.jimrthy.substratum.core :refer :all]
            ;; TODO: Convert this to component-dsl

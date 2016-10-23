@@ -26,6 +26,7 @@
 ;;; to do this correctly
 ;;; (the problem is that tests don't accept any parameters,
 ;;; but I really need to pass a new system to each)
+;;; TODO: Switch to the cpt-dsl "global" system closure/monadic thing
 (def system nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -69,9 +70,7 @@ can't just call the individual tests manually"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
 
-;; TODO: ^:always-check
 (s/fdef extract-connection-string
-        :args (s/cat)
         :ret string?)
 (defn extract-connection-string
   "Pull the connection string from the system."
@@ -127,7 +126,7 @@ can't just call the individual tests manually"
   '{:find [?e]
     :where [[?e :dt/dt :dt/dt]]})
 
-;; Compare 2 transactions
+;; Comparing 2 transactions is easy
 (comment (let [lhs {:db/doc "N-d sequences",
                     :db/index true,
                     :db.install/_attribute :db.part/db,
@@ -300,11 +299,11 @@ But, seriously. I had to start somewhere."
   (testing "Basic data platform installation"
       (let [cxn-str (extract-connection-string)
             conn (d/connect cxn-str)]
-        (testing "No interesting attributes, pre-install"
+        (testing "No interesting attributes, before installation"
           (is (not (conformity/has-attribute? (d/db conn) :dt/dt))))
         (let [uri (:database-uri system)
               dscr {:uri uri
-                    :schema-resource-name #_"testing-platform-basics" "test-schema.edn"
+                    :schema-resource-name "test-schema.edn"
                     :partition-name "Data Platform Basics"}]
           (platform/install-schema-from-resource! dscr))
         ;; OK, we should have everything set up to let

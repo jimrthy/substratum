@@ -1,5 +1,14 @@
 (ns com.jimrthy.substratum.platform
-  "Based upon the 'Datomic as a Data Platform' talk by Antonio Andrade"
+  "Really just specs and wrappers around conformity and datomic-schema
+
+It translates from an EDN description that makes sense to me into what they need
+
+These parts were supposed to be based upon the 'Datomic as a Data Platform'
+talk by Antonio Andrade.
+
+In practice, that doesn't seem to have worked out.
+
+TODO: Rename this to something like installation"
   (:require [clojure.spec :as s]
             [com.jimrthy.substratum.core]
             [datomic.api :as d]
@@ -116,12 +125,12 @@
 (s/def ::partitions ::part-txn-descr-seq)
 (s/def ::attribute-types (s/coll-of ::attr-type-txn))
 (s/def ::attributes ::attr-txn-descr-seq)
-;; Q: Should this be a coll-of?
-;; Actually, in the original, I just have
-;; (s/coll-of string?) and a comment that it's just a
-;; sequence of names.
-;; Go with this version for now, except that it gets overridden
-;; shortly
+
+;; In the original, I had a comment that it's just a
+;; sequence of names, and it was defined as (s/coll-of string?)
+;; That was definitely wrong.
+;; However, that doesn't mean I don't have something that needs
+;; that definition.
 (s/def ::txn-dscr-seq (s/keys :req [::partitions ::attribute-types ::attributes]))
 
 (s/def ::norm-name (s/or :string string?
@@ -133,12 +142,6 @@
                                        ::tx-index
                                        ::tx-result]))
 (s/def ::conformation-sequence (s/coll-of ::conformation))
-
-;;; Note that this is a duplicate which overrides something
-;;; that looks quite different a few lines up.
-;;; Q: Which, if either, did I actually want/mean?
-(s/def ::txn-dscr-seq (s/coll-of (s/tuple ::part-txn-dscr-seq
-                                          ::attributes)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
@@ -154,7 +157,7 @@
         ;; comments below), nil on success.
         ;; According to frereth-server, ::conformation-sequence
         ;; It seems like it's changed from one to the other.
-        ;; TODO: What does it return now?
+        ;; Q: What does it return now?
         :ret any?)
 (defn do-schema-installation
   "Add schema/partition"
@@ -192,19 +195,22 @@
   (util/load-resource resource-name))
 
 (defn schema-black-magic
+  "Converts a pair of (attribute name, field descriptions) into something datomic-schema can expand.
+
+Really just refactored out of a map description"
   [[attr field-descrs]]
   (log/debug "Individual attribute: " attr
              "\nDescription:\n" field-descrs)
-    ;; I'm duplicating some of the functionality from
-    ;; Yuppiechef's library because he has it hidden
-    ;; behind macros
+  ;; Under the covers, Yuppiechef's schema macro just
+  ;; calls schema*.
   (yuppie-schema/schema* (name attr)
                          {:fields (reduce (fn [acc [k v]]
                                             (comment (log/debug "Setting up field" k "with characteristics" v))
                                             (assoc acc (name k)
                                                    (if (= (count v) 1)
                                                      ;; If there isn't an option set,
-                                                     ;; use vec to make sure one gets appended
+                                                     ;; append one to a vector of the field.
+                                                     ;; Because we might have a lazy seq here.
                                                      (do
                                                        (comment (log/debug "Adding default empty set"))
                                                        (conj (vec v) #{}))
@@ -237,9 +243,6 @@ through generate-schema to generate actual transactions"
   [attrs]
   (log/debug "expanded-descr->schema -- calling generate-schema on:\n"
              (util/pretty attrs) "\na " (class attrs))
-  (comment (map (fn [namespace]
-                  (yuppie-schema/generate-schema namespace {:index-all? true}))
-                attrs))
   (yuppie-schema/generate-schema attrs {:index-all? true}))
 
 (s/fdef expand-txn-descr
@@ -253,13 +256,17 @@ to the actual datastructure that datomic uses"
            (util/pretty descr)
            "with keys:"
            (keys descr))
-  (let [parts (map yuppie-schema/part #_(first descr) (:partitions descr))
-        attrs (expand-schema-descr #_(second descr) (:attribute-types descr))
+  (let [parts (map yuppie-schema/part (:partitions descr))
+        attrs (expand-schema-descr (:attribute-types descr))
         generated-schema (expanded-descr->schema attrs)
-        entities #_(nth descr 2) (:attributes descr)]
+        entities (:attributes descr)]
     {:structure (concat (yuppie-schema/generate-parts parts)
                         generated-schema)
      :data entities}))
+
+;;; It's better to just install your schema from a resource definition.
+;;; But doing it this way will probably always be more convenient from
+;;; the REPL
 
 ;; TODO: ^:always-validate
 (s/fdef install-schema!
@@ -267,13 +274,6 @@ to the actual datastructure that datomic uses"
                      :tx-description ::txn-dscr-seq)
         ;; Q: What does this return?
         :ret any?)
-;; Comment from the docstring I'm cut/pasting this from:
-
-;; This version is failing unit tests, because it's broken.
-;; But it belongs in substratum instead of here, so I'm
-;; sort-of OK with that.
-;; My main goal at this point is to get things back into
-;; a shape that's solid enough to start working on it again
 (defn install-schema!
   [uri-description partition-name tx-description]
   (let [uri (db/build-connection-string uri-description)]
@@ -328,7 +328,7 @@ to the actual datastructure that datomic uses"
 ;;; Q: Is there any point to this at all?
 ;;; A: Well...maybe it's worth specifying that other pieces
 ;;; need the schema installed in order to run?
-;;; Seems like, honestly, it should really just go away.
+;;; Seems like, honestly, it should just go away.
 (s/fdef ctor
         :args (s/cat :config ::opt-database-schema)
         :ret ::database-schema)
