@@ -1,33 +1,33 @@
 (ns com.jimrthy.substratum.schema
   "Schema associated with Antonio Andrade's Datomic Data Platform.
-This is really the heart of substratum.")
+  This is really the heart of substratum."
+  (:require [datomic.api :as d]))
 
 (defn platform
   []
-  {:partitions ["substratum"]
-   :attribute-types {;; Baseline attribute type definitions
-                     dt {dt [:ref #{"Think of an object's class"}]
-                         namespace [:string #{"Think of a class' package"}]
-                         name [:string #{".getSimpleName"}]
-                         parent [:ref #{"For Type hierarchies and inheritance: .getSuperClass"}]
-                         list [:ref #{"For N-d lists"}]
-                         component [:ref #{"If this Type is a list, this describes what that list contains"}]
-                         fields [:ref #{"Data Type references to more Data Types" :many}]
-                         any [:ref #{"Built-in types enumeration. Needs to point to a dt.any Entity"}]}
-                     ;; These next are for the Any/Variant type
-                     dt.any {bigdec [:bigdec]
-                             bigint [:bigint]
-                             boolean [:boolean]
-                             bytes [:bytes]
-                             double [:double]
-                             float [:float]
-                             instant [:instant]
-                             keyword [:keyword]
-                             long [:long]
-                             ref [:ref]
-                             string [:string]
-                             uri [:uri]
-                             uuid [:uuid]}}
+  {:attribute-types '{;; Baseline attribute type definitions
+                      dt {dt [:ref #{"Think of an object's class"}]
+                          namespace [:string #{"Think of a class' package"}]
+                          name [:string #{".getSimpleName"}]
+                          parent [:ref #{"For Type hierarchies and inheritance: .getSuperClass"}]
+                          list [:ref #{"For N-d lists"}]
+                          component [:ref #{"If this Type is a list, this describes what that list contains"}]
+                          fields [:ref #{"Data Type references to more Data Types" :many}]
+                          any [:ref #{"Built-in types enumeration. Needs to point to a dt.any Entity"}]}
+                      ;; These next are for the Any/Variant type
+                      dt.any {bigdec [:bigdec]
+                              bigint [:bigint]
+                              boolean [:boolean]
+                              bytes [:bytes]
+                              double [:double]
+                              float [:float]
+                              instant [:instant]
+                              keyword [:keyword]
+                              long [:long]
+                              ref [:ref]
+                              string [:string]
+                              uri [:uri]
+                              uuid [:uuid]}}
    ;; Q: Didn't these actually get defined in the :attribute-types section above?
    ;; A: No. Those define the attribute schemas.
    ;; This defines attributes that use those schemas.
@@ -136,4 +136,6 @@ This is really the heart of substratum.")
                              :dt.any/uuid]}
                 ;; TODO: Still have to cope w/ Typed References
                 ;; And then things start getting interesting w/ migrations
-                ]})
+                ]
+   ;; Q: Is there a good reason for this being set up as multiples?
+   :partitions ["substratum"]})

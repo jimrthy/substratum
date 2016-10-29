@@ -1,10 +1,10 @@
-(ns com.jimrthy.substratum.platform-test
+(ns com.jimrthy.substratum.installer-test
   "Unit testing the database is generally considered a bad idea, but I have to start somewhere"
   (:require [clojure.pprint :refer (pprint)]
             [clojure.spec :as s]
             [clojure.test :refer (are deftest is testing use-fixtures)]
             [com.jimrthy.substratum.core :as db]
-            [com.jimrthy.substratum.platform :as platform]
+            [com.jimrthy.substratum.installer :as installer]
             [com.jimrthy.substratum.util :as util]
             [com.stuartsierra.component :as component]
             [component-dsl.system :as cpt-dsl]
@@ -248,7 +248,7 @@ But, seriously. I had to start somewhere."
         (println "Getting ready to try to run conformity on:\n"
                  structural-txn)
         (let [migration-success
-              (platform/do-schema-installation cxn-str "silly-test" structural-txn)]
+              (installer/do-schema-installation cxn-str "silly-test" structural-txn)]
           (is migration-success)
           ;; Digging into this level of detail is really unit-testing
           ;; conformity. Which is worse than silly.
@@ -292,7 +292,7 @@ But, seriously. I had to start somewhere."
       (let [dscr {:uri (:database-uri system)
                   :schema-resource-name "test-schema.edn"
                   :partition-name "Basic EDN Installation"}]
-        (platform/install-schema-from-resource! dscr))
+        (installer/install-schema-from-resource! dscr))
       (is (conformity/has-attribute? (d/db conn) :dt/dt)))))
 
 (deftest data-platform-basics
@@ -305,7 +305,7 @@ But, seriously. I had to start somewhere."
               dscr {:uri uri
                     :schema-resource-name "test-schema.edn"
                     :partition-name "Data Platform Basics"}]
-          (platform/install-schema-from-resource! dscr))
+          (installer/install-schema-from-resource! dscr))
         ;; OK, we should have everything set up to let
         ;; us start rocking and rolling with our kick-ass
         ;; Data Platform.
@@ -341,8 +341,8 @@ But, seriously. I had to start somewhere."
                                 dt.any {bigdec [:bigdec]
                                         bigint [:bigint]
                                         boolean [:boolean]}}
-               my-expansion (platform/expand-schema-descr my-description)
-               my-generation (platform/expanded-descr->schema my-expansion)]
+               my-expansion (installer/expand-schema-descr my-description)
+               my-generation (installer/expanded-descr->schema my-expansion)]
            (println "Base Description")
            (pprint baseline)
            (println "My Version")
@@ -390,8 +390,8 @@ But, seriously. I had to start somewhere."
                            dt.any {bigdec [:bigdec]
                                    bigint [:bigint]
                                    boolean [:boolean]}}
-          my-expansion (platform/expand-schema-descr my-description)
-          my-generation (platform/expanded-descr->schema my-expansion)]
+          my-expansion (installer/expand-schema-descr my-description)
+          my-generation (installer/expanded-descr->schema my-expansion)]
       (is (= baseline my-expansion))
       (if (not= canonical my-generation)
         (verify-same-elements canonical my-generation)

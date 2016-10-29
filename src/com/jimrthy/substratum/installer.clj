@@ -1,20 +1,13 @@
-(ns com.jimrthy.substratum.platform
+(ns com.jimrthy.substratum.installer
   "Really just specs and wrappers around conformity and datomic-schema
 
-TODO: Rename this to something like installation
+It translates from a high-level description that makes sense to me into what they need
 
-Then platform.clj can focus on the actual point: installing the data platform
-definet in schema.clj. Or maybe this piece goes away completely and that
-part moves into core.
+Note that the main point is to install the pieces defined in Antonio Andrade's
+talk about datomic data platforms, as translated in the schema ns.
 
-It translates from an EDN description that makes sense to me into what they need
-
-These parts were supposed to be based upon the 'Datomic as a Data Platform'
-talk by Antonio Andrade.
-
-In practice, that doesn't seem to have worked out.
-
-"
+Actually, the main point is to use that data platform. This is another step
+in that direction."
   (:require [clojure.spec :as s]
             [com.jimrthy.substratum.core]
             [datomic.api :as d]
@@ -22,6 +15,7 @@ In practice, that doesn't seem to have worked out.
                                            fields]
              :as yuppie-schema]
             [com.jimrthy.substratum.core :as db]
+            [com.jimrthy.substratum.schema :as schema]
             [com.jimrthy.substratum.util :as util]
             [io.rkn.conformity :as conformity]
             ;; TODO: Make this go away
@@ -270,9 +264,31 @@ to the actual datastructure that datomic uses"
                         generated-schema)
      :data entities}))
 
-;;; It's better to just install your schema from a resource definition.
+;;; Q: Is there any point to this at all?
+;;; A: Well...maybe it's worth specifying that other pieces
+;;; need the schema installed in order to run?
+;;; Seems like, honestly, it should just go away.
+(s/fdef ctor
+        :args (s/cat :config ::opt-database-schema)
+        :ret ::database-schema)
+(defn ^:deprecated ctor
+  [config]
+  ;; Because I'm just using a plain hashmap for now
+  (select-keys config [:schema-resource-name :uri]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Public
+
+;;; It's generally better to just install your schema from a resource
+;;; definition.
+;;; Recompiling code to modify database definitions went out of style
+;;; back in the 70's.
 ;;; But doing it this way will probably always be more convenient from
-;;; the REPL
+;;; the REPL.
+;;; And the main point behind this entire library is to set up the
+;;; platform defined in the schema namespace so you (or, really,
+;;; your customers) can use that as the foundation for the data
+;;; they care about.
 
 ;; TODO: ^:always-validate
 (s/fdef install-schema!
@@ -309,8 +325,12 @@ to the actual datastructure that datomic uses"
                                :uri uri
                                :uri-description uri-description})))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Public
+(defn install-platform!
+  [uri-description]
+  (let [details (schema/platform)]
+    (install-schema! uri-description
+                     (-> details :partitions first)
+                     details)))
 
 (s/fdef install-schema-from-resource!
         :args (s/cat :this ::database-schema)
@@ -330,15 +350,3 @@ to the actual datastructure that datomic uses"
                       {:missing-transactions this
                        :resource-name (:schema-resource-name this)
                        :keys (keys this)})))))
-
-;;; Q: Is there any point to this at all?
-;;; A: Well...maybe it's worth specifying that other pieces
-;;; need the schema installed in order to run?
-;;; Seems like, honestly, it should just go away.
-(s/fdef ctor
-        :args (s/cat :config ::opt-database-schema)
-        :ret ::database-schema)
-(defn ctor
-  [config]
-  ;; Because I'm just using a plain hashmap for now
-  (select-keys config [:schema-resource-name :uri]))
