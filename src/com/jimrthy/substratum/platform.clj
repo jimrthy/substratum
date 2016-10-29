@@ -1,6 +1,12 @@
 (ns com.jimrthy.substratum.platform
   "Really just specs and wrappers around conformity and datomic-schema
 
+TODO: Rename this to something like installation
+
+Then platform.clj can focus on the actual point: installing the data platform
+definet in schema.clj. Or maybe this piece goes away completely and that
+part moves into core.
+
 It translates from an EDN description that makes sense to me into what they need
 
 These parts were supposed to be based upon the 'Datomic as a Data Platform'
@@ -8,7 +14,7 @@ talk by Antonio Andrade.
 
 In practice, that doesn't seem to have worked out.
 
-TODO: Rename this to something like installation"
+"
   (:require [clojure.spec :as s]
             [com.jimrthy.substratum.core]
             [datomic.api :as d]
