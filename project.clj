@@ -26,7 +26,7 @@
                  ;; for others after it's useful for me.
                  ;; So just port what I've already written.
                  [io.rkn/conformity "0.4.0"]
-                 [org.clojure/clojure "1.9.0-alpha13"]
+                 [org.clojure/clojure "1.9.0-alpha14"]
                  [org.clojure/core.async "0.2.391"]]
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
