@@ -7,11 +7,10 @@ probably get moved into, say, _impl"
   (:require [clojure.spec :as s]
             [com.jimrthy.substratum.util :as util]
             [com.stuartsierra.component :as component]
-            [datomic.api :as d]
-            [hara.event :refer [raise]]
-            [taoensso.timbre :as log])
+            [datomic.api :as d])
   (:import [datomic Datom]
-           [datomic.db Db DbId]))
+           [datomic.db Db DbId]
+           [org.slf4j LoggerFactory]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specs
@@ -201,20 +200,25 @@ Q: Are those assumptions about multiple connections still true?"
 
 ;;; TODO: Come up with a better/less contentious name
 (defrecord URL [description
-                connection-string]
+                connection-string
+                logger]
   component/Lifecycle
   (start
-   [this]
-   "Main point is to verify that we can connect
+    [this]
+    "Main point is to verify that we can connect
 Although this also serves to create the database
 if it doesn't already exast and cache the connection"
-   (comment) (log/debug "Starting up the URL. Description: " (util/pretty description)
-                        "with keys:" (keys description))
-   (let [connection-string (build-connection-string description)]
-     (when (d/create-database connection-string)
-       (log/warn "Created new database"))
-     (d/connect connection-string)
-     (assoc this :connection-string connection-string)))
+    (let [logger (LoggerFactory/getLogger URL)]
+      (comment) (.debug logger (str "Starting up the URL. Description: "
+                                    (util/pretty description)
+                                    "with keys:" (keys description)))
+      (let [connection-string (build-connection-string description)]
+        (when (d/create-database connection-string)
+          (.warn logger "Created new database"))
+        (d/connect connection-string)
+        (assoc this
+               :connection-string connection-string
+               :logger logger))))
   (stop
    [this]
    (disconnect description)
@@ -223,21 +227,6 @@ if it doesn't already exast and cache the connection"
    ;; At least, that seems to be what I'm picking up
    ;; from the mailing list
    (assoc this :connection-string nil)))
-
-;;; Printing helpers.
-;;; TODO: These really belong in their own namespace.
-;;; Or, at least, not in this one
-;;; Q: Should they really be calling print??
-
-(defmethod io.aviso.exception/exception-dispatch URL
-  [url]
-  (print "<#URL" (:connection-string url) ">"))
-
-(defmethod io.aviso.exception/exception-dispatch DbId
-  [db-id]
-  ;; This is super cheesy. But I need something to keep
-  ;; my error reporting about it from throwing another exception
-  (print "<#DbId" (str db-id) ">"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public

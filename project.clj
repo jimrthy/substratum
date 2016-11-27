@@ -5,17 +5,11 @@
                  ;; of these
                  [com.jimrthy/component-dsl "0.1.2-SNAPSHOT"  :exclusions [com.google.guava/guava]]
                  [com.stuartsierra/component "0.3.1"]
-                 ;; This really doesn't seem worth including
-                 ;; TODO: Make it go away.
-                 [com.taoensso/timbre "4.7.4"]
                  ;; Q: How much value-add do I get here?
                  ;; A: Not enough.
                  ;; If end-users want to do attribute schema
                  ;; short-hand, I shouldn't force one on them
                  [datomic-schema "1.3.0"]
-                 ;; This seems even worse
-                 ;; TODO: Definitely need to make it go away
-                 [im.chit/hara.event "2.4.4"]
                  ;; This seems very debatable
                  ;; End-users probably need to be responsible
                  ;; for their own data migration paths
@@ -29,7 +23,7 @@
                  ;; for others after it's useful for me.
                  ;; So just port what I've already written.
                  [io.rkn/conformity "0.4.0"]
-                 [org.clojure/clojure "1.9.0-alpha13"]
+                 [org.clojure/clojure "1.9.0-alpha14"]
                  [org.clojure/core.async "0.2.391"]
                  [org.clojure/tools.cli "0.3.1"]]
   :description "Data Platform on Datomic"
