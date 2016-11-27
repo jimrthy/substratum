@@ -1,5 +1,5 @@
 (defproject com.jimrthy.substratum "0.1.0-SNAPSHOT"
-  :dependencies [[com.datomic/datomic-free "0.9.5394" :exclusions [org.clojure/tools.cli]]
+  :dependencies [[com.datomic/datomic-free "0.9.5407" :exclusions [org.clojure/tools.cli]]
                  ;; Since this is supposed to be a library,
                  ;; I really shouldn't even depend on either
                  ;; of these
@@ -24,8 +24,8 @@
                  ;; So just port what I've already written.
                  [io.rkn/conformity "0.4.0"]
                  [org.clojure/clojure "1.9.0-alpha14"]
-                 [org.clojure/core.async "0.2.391"]
-                 [org.clojure/tools.cli "0.3.1"]]
+                 [org.clojure/core.async "0.2.395"]
+                 [org.clojure/tools.cli "0.3.5"]]
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
