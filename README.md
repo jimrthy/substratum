@@ -45,8 +45,8 @@ The key datom that makes this transaction different than the first is the
 of that as the table where this entity lives. If you're coming from an OO
 background, the acronym is for Data Type.
 
-If you're coming at this from a functional programming background, just
-think of it as a tag to help you remember what's supposed to be in the
+If you're coming at this from a dynamically typed functional programming
+background, just think of it as a tag to help you remember what's supposed to be in the
 map.
 
 Note that you're responsible for defining what fields are associated with

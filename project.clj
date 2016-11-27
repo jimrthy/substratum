@@ -1,5 +1,5 @@
 (defproject com.jimrthy.substratum "0.1.0-SNAPSHOT"
-  :dependencies [[com.datomic/datomic-free "0.9.5394"]
+  :dependencies [[com.datomic/datomic-free "0.9.5394" :exclusions [org.clojure/tools.cli]]
                  ;; Since this is supposed to be a library,
                  ;; I really shouldn't even depend on either
                  ;; of these
@@ -9,6 +9,9 @@
                  ;; TODO: Make it go away.
                  [com.taoensso/timbre "4.7.4"]
                  ;; Q: How much value-add do I get here?
+                 ;; A: Not enough.
+                 ;; If end-users want to do attribute schema
+                 ;; short-hand, I shouldn't force one on them
                  [datomic-schema "1.3.0"]
                  ;; This seems even worse
                  ;; TODO: Definitely need to make it go away
@@ -27,7 +30,8 @@
                  ;; So just port what I've already written.
                  [io.rkn/conformity "0.4.0"]
                  [org.clojure/clojure "1.9.0-alpha13"]
-                 [org.clojure/core.async "0.2.391"]]
+                 [org.clojure/core.async "0.2.391"]
+                 [org.clojure/tools.cli "0.3.1"]]
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}

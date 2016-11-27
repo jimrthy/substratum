@@ -290,9 +290,23 @@ to the actual datastructure that datomic uses"
 ;;; your customers) can use that as the foundation for the data
 ;;; they care about.
 
+;;; Although there are really two pieces there:
+;;; 1. Install the low-level platform schema
+;;; 2. Install the higher-level data modelling schema for individual apps
+;;; that's built on top of that platform
+
 ;; TODO: ^:always-validate
 (s/fdef install-schema!
         :args (s/cat :uri-description :com.jimrthy.substratum.core/uri-description
+                     ;; Q: Does this make any sense?
+                     ;; It's a nice shortcut, but ::tx-dscr-seq
+                     ;; specifically includes a ::partitions key for
+                     ;; partition-creation transactions.
+                     ;; Or maybe I'm tangling my abstraction layers.
+                     ;; Is this the partition where attributes and
+                     ;; data types should live, as opposed to the
+                     ;; partitions the actual data should occupy?
+                     :partition-name string?
                      :tx-description ::txn-dscr-seq)
         ;; Q: What does this return?
         :ret any?)
