@@ -29,13 +29,14 @@ in that direction."
 (s/def ::uri :com.jimrthy.substratum.core/possible-uri-descriptions)
 ;; Q: Are there any restrictions on this?
 (s/def ::partition-name string?)
+(s/def ::database-definition (s/keys :req-un [:com.jimrthy.substratum.core/uri
+                                              ::partition-name]))
 ;; A: Until there's something useful to do with start/stop,
 ;; just use a plain hashmap instead of a real defrecord Component.
 ;; It's tempting to make (start) convert the uri to a connection-string.
 ;; That temptation seems like a mistake.
-(s/def ::database-schema (s/keys :req-un [::schema-resource-name
-                                          :com.jimrthy.substratum.core/uri
-                                          ::partition-name]))
+(s/def ::database-schema (s/merge ::database-definition
+                                  (s/keys :req-un [::schema-resource-name])))
 ;; The parameters to create that
 (s/def ::opt-database-schema (s/keys :opt-un [::schema-resource-name
                                               :com.jimrthy.substratum.core/uri]))
@@ -346,7 +347,10 @@ to the actual datastructure that datomic uses"
                                :uri uri
                                :uri-description uri-description})))))))
 
+(s/fdef install-platform!
+        :args (s/cat :uri-description ::database-definition))
 (defn install-platform!
+  "This installs the base-level datomic platform pieces"
   [uri-description]
   (let [details (schema/platform)]
     (install-schema! uri-description
