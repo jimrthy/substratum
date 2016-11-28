@@ -133,6 +133,12 @@ in that direction."
 ;; that definition.
 (s/def ::txn-dscr-seq (s/keys :req [::partitions ::attribute-types ::attributes]))
 
+;; Q: Are these next two even vaguely close to reality?
+;; I'm really trying to reverse-engineer what's going on inside here
+(s/def ::structure ::transaction-sequence)
+(s/def ::data ::transaction-sequence)
+(s/def ::platform-txns (s/keys :req [::structure ::data]))
+
 (s/def ::norm-name (s/or :string string?
                          :keyword keyword?))
 (s/def ::tx-index integer?)
@@ -253,7 +259,7 @@ through generate-schema to generate actual transactions"
 
 (s/fdef expand-txn-descr
         :args (s/cat :descr ::txn-descr-seq)
-        :ret ::transaction-sequence)
+        :ret ::platform-txns)
 (defn expand-txn-descr
   "Convert from a slightly-more-readable high-level description
 to the actual datastructure that datomic uses"
@@ -266,9 +272,9 @@ to the actual datastructure that datomic uses"
         attrs (expand-schema-descr (:attribute-types descr))
         generated-schema (expanded-descr->schema attrs)
         entities (:attributes descr)]
-    {:structure (concat (yuppie-schema/generate-parts parts)
+    {::structure (concat (yuppie-schema/generate-parts parts)
                         generated-schema)
-     :data entities}))
+     ::data entities}))
 
 ;;; Q: Is there any point to this at all?
 ;;; A: Well...maybe it's worth specifying that other pieces
@@ -322,7 +328,7 @@ to the actual datastructure that datomic uses"
         logger (LoggerFactory/getLogger "substratum-installer")]
     (comment) (.debug logger (str "Expanding high-level schema transaction description:\n"
                                   (util/pretty tx-description)))
-        (let [{:keys [structure data]} (expand-txn-descr tx-description)]
+        (let [{:keys [::structure ::data]} (expand-txn-descr tx-description)]
           (comment) (.debug logger (str "Setting up schema using\n"
                                         (util/pretty structure)
                                         "at\n" uri))
@@ -340,7 +346,9 @@ to the actual datastructure that datomic uses"
                                    (s/explain ::transaction-sequence structure)
                                    "Installing schema based on\n"
                                    (util/pretty structure)
-                                   "\nwhich has" (count structure) "members")
+                                   "\nwhich has "
+                                   (count structure)
+                                   " members")
                               {:problem-tx tx-description
                                :problem-struct structure
                                :tx-dscr tx-description
