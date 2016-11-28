@@ -15,10 +15,10 @@
                                             generate-schema
                                             part
                                             schema)]
-            [io.rkn.conformity :as conformity]
-            [taoensso.timbre :as log])
+            [io.rkn.conformity :as conformity])
   (:import [clojure.lang ExceptionInfo IExceptionInfo]
-           [datomic.impl Exceptions$IllegalArgumentExceptionInfo]))
+           [datomic.impl Exceptions$IllegalArgumentExceptionInfo]
+           [org.slf4j LoggerFactory]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Globals
@@ -48,7 +48,8 @@
 can't just call the individual tests manually"
   [f]
   (try
-    (let [pre-testable-system (system-for-testing)]
+    (let [pre-testable-system (system-for-testing)
+          logger (LoggerFactory/getLogger "substratum.installer-test/in-mem-db-system")]
       ;; Most tests probably make sense to run against that
       ;; TODO: Add test features
       (try
@@ -58,13 +59,17 @@ can't just call the individual tests manually"
             (alter-var-root #'system (constantly started-system))
             (f)
             (catch RuntimeException ex
-              (log/error ex "FAIL"))
+              (.error logger (str ex "\n"
+                                  (.getStackTrace ex)
+                                  "\nFAIL")))
             (finally
               ;; Better safe than sorry
               (let [stopped (component/stop started-system)]
                 (alter-var-root #'system (constantly stopped))))))
         (catch RuntimeException ex
-          (log/error ex "Setting up baseline admin system"))))))
+          (.error logger (str ex
+                              (.getStackTrace ex)
+                              "\nSetting up baseline admin system")))))))
 (use-fixtures :each in-mem-db-system)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
