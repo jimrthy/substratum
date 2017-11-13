@@ -8,8 +8,9 @@ talk about datomic data platforms, as translated in the schema ns.
 
 Actually, the main point is to use that data platform. This is another step
 in that direction."
-  (:require [clojure.spec :as s]
-            [com.jimrthy.substratum.core]
+  (:require [clojure.spec.alpha :as s]
+            [com.jimrthy.substratum.core :as substratum]
+            [com.jimrthy.substratum.log :as log]
             [datomic.api :as d]
             [datomic-schema.schema :refer [defdbfn
                                            fields]
@@ -18,8 +19,7 @@ in that direction."
             [com.jimrthy.substratum.schema :as schema]
             [com.jimrthy.substratum.util :as util]
             [io.rkn.conformity :as conformity])
-  (:import [clojure.lang ExceptionInfo]
-           [org.slf4j LoggerFactory]))
+  (:import [clojure.lang ExceptionInfo]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specs
@@ -158,10 +158,11 @@ in that direction."
         ;; According to frereth-server, ::conformation-sequence
         ;; It seems like it's changed from one to the other.
         ;; Q: What does it return now?
-        :ret any?)
+        :ret [any? ::log/entries])
 (defn do-schema-installation
   "Add schema/partition"
-  [uri
+  [logger
+   uri
    partition-name
    transactions]
   (d/create-database uri)
@@ -176,111 +177,118 @@ in that direction."
         ;; And, honestly, it's not like it's asking a lot to have them
         ;; wrap the transactions into a norms-map shape.
         ;; Or maybe I shouldn't be trying to hide it in the first place.
-        norms-map {partition-key {:txes [(vec transactions)]}}]
-    (println "Conforming" conn "at" uri "\nto\n" norms-map "\nin" partition-name)
+        norms-map {partition-key {:txes [(vec transactions)]}}
+        logger (log/info
+                logger
+                ::conforming
+                "Doing it"
+                {::connection conn
+                 ::uri uri
+                 ::norms-map norms-map
+                 ::partition partition-name})]
     ;; Q: Which of these do I want?
     (let [result (conformity/ensure-conforms conn norms-map)
           original (conformity/ensure-conforms conn norms-map [partition-key])
-          logger (LoggerFactory/getLogger "substratum-installer")]
-      (.debug logger "ensure-conforms returned:\n" result)
+          logger (log/debug logger ::do-schema "ensure-conforms returned" result)]
       ;; Returns nil on success
-      result)))
+      [result logger])))
 
 (s/fdef load-transactions-from-resource
-        :args (s/cat :resource-name string?)
-        :ret ::txn-dscr-seq)
+        :args (s/cat :logger ::log/log-entries
+                     :resource-name string?)
+        :ret [::txn-dscr-seq ::log/log-entries])
 (defn load-transactions-from-resource
-  [resource-name]
-  (let [logger (LoggerFactory/getLogger "substratum-installer")]
-    (.debug logger (str "Getting ready to load schema transaction from resource: "
-                        resource-name))
-    (util/load-resource resource-name)))
+  [logger
+   resource-name]
+  (let [logger
+        (log/debug logger
+                   ::load-txns
+                   "Getting ready to load schema transaction from resource"
+                   {::name resource-name})])
+  [(util/load-resource resource-name) logger])
 
 (defn schema-black-magic
   "Converts a pair of (attribute name, field descriptions) into something datomic-schema can expand.
 
 Really just refactored out of a map description"
-  [[attr field-descrs]]
-  (let [logger (LoggerFactory/getLogger "substratum-installer")]
-    (.debug logger (str "Individual attribute: " attr
-                        "\nDescription:\n" field-descrs))
+  [logger
+   [attr field-descrs]]
+  (let [logger (log/debug logger ::black-magic
+                          "Expand attribute/field descriptions"
+                          {::attribute-name attr
+                           ::description field-descrs})]
     ;; Under the covers, Yuppiechef's schema macro just
     ;; calls schema*.
     (yuppie-schema/schema* (name attr)
-                           {:fields (reduce (fn [acc [k v]]
+                           {:fields (reduce (fn [[logger
+                                                  acc] [k v]]
                                               (comment (.debug logger "Setting up field" k "with characteristics" v))
-                                              (assoc acc (name k)
-                                                     (if (= (count v) 1)
-                                                       ;; If there isn't an option set,
-                                                       ;; append one to a vector of the field.
-                                                       ;; Because we might have a lazy seq here.
-                                                       (do
-                                                         (comment (.debug logger "Adding default empty set"))
-                                                         (conj (vec v) #{}))
-                                                       (if (= (count v) 2)
-                                                         v
-                                                         (throw (ex-info (str "Bad field description\n"
-                                                                              v
-                                                                              " => "
-                                                                              k) {:illegal-field-description v
-                                                                                  :field-id k}))))))
-                                            {}
+                                              (let [result
+                                                    (assoc acc (name k)
+                                                           (if (= (count v) 1)
+                                                             ;; If there isn't an option set,
+                                                             ;; append one to a vector of the field.
+                                                             ;; Because we might have a lazy seq here.
+                                                             (do
+                                                               (comment (.debug logger "Adding default empty set"))
+                                                               (conj (vec v) #{}))
+                                                             (if (= (count v) 2)
+                                                               v
+                                                               (throw (ex-info (str "Bad field description\n"
+                                                                                    v
+                                                                                    " => "
+                                                                                    k) {:illegal-field-description v
+                                                                                        :field-id k})))))]
+                                                [logger result]))
+                                            [logger {}]
                                             field-descrs)})))
 
 ;;; Q: What does this return?
 (s/fdef expand-schema-descr
-        :args (s/cat :descr ::attr-txn-descr-seq)
-        :ret any?)
+        :args (s/cat :logger ::log/entries
+                     :descr ::attr-txn-descr-seq)
+        :ret (s/tuple any? ::log/log-entries))
 (defn expand-schema-descr
   "Isolating a helper function to start expanding attribute descriptions into transactions"
-  [descr]
-  (let [logger (LoggerFactory/getLogger "substratum-installer")]
-    (.info logger (str "Expanding Schema Description:\n"
-                       (util/pretty descr)
-                       "\na " (class descr))))
-  (map schema-black-magic descr))
+  [logger descr]
+  (let [logger
+        (log/info logger
+                  ::schema.expansion
+                  "Expanding Schema Description"
+                  descr)]
+    (map schema-black-magic logger descr)))
 
 (defn expanded-descr->schema
   "Take the output of expand-schema-descr (which should be identical
 to the output of a seq of Yuppiechef's schema macro) and run it
 through generate-schema to generate actual transactions"
-  [attrs]
-  (let [logger (LoggerFactory/getLogger "substratum-installer")]
-    (.debug logger (str "expanded-descr->schema -- calling"
-                        " generate-schema on:\n"
-                        (util/pretty attrs) "\na " (class attrs))))
-  (yuppie-schema/generate-schema attrs {:index-all? true}))
+  [logger attrs]
+  (let [logger
+        (log/debug logger
+                   ::dscr->schema
+                   "calling generate-schema"
+                   attrs)]
+    [(yuppie-schema/generate-schema attrs {:index-all? true}) logger]))
 
 (s/fdef expand-txn-descr
-        :args (s/cat :descr ::txn-descr-seq)
-        :ret ::transaction-sequence)
+        :args (s/cat :logger ::log/entries
+                     :descr ::txn-descr-seq)
+        :ret (s/tuple ::transaction-sequence ::log/entries))
 (defn expand-txn-descr
   "Convert from a slightly-more-readable high-level description
 to the actual datastructure that datomic uses"
-  [descr]
-  (println "Expanding Transaction Description:\n"
-           (util/pretty descr)
-           "with keys:"
-           (keys descr))
+  [logger descr]
+  (let [logger (log/info logger ::expand.txn-dscr
+                         "Expanding Transaction Description"
+                         descr)])
   (let [parts (map yuppie-schema/part (:partitions descr))
-        attrs (expand-schema-descr (:attribute-types descr))
-        generated-schema (expanded-descr->schema attrs)
+        [attrs logger] (expand-schema-descr logger (:attribute-types descr))
+        [generated-schema logger] (expanded-descr->schema logger attrs)
         entities (:attributes descr)]
-    {:structure (concat (yuppie-schema/generate-parts parts)
-                        generated-schema)
-     :data entities}))
-
-;;; Q: Is there any point to this at all?
-;;; A: Well...maybe it's worth specifying that other pieces
-;;; need the schema installed in order to run?
-;;; Seems like, honestly, it should just go away.
-(s/fdef ctor
-        :args (s/cat :config ::opt-database-schema)
-        :ret ::database-schema)
-(defn ^:deprecated ctor
-  [config]
-  ;; Because I'm just using a plain hashmap for now
-  (select-keys config [:schema-resource-name :uri]))
+    [{:structure (concat (yuppie-schema/generate-parts parts)
+                         generated-schema)
+      :data entities}
+     logger]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public
@@ -292,7 +300,7 @@ to the actual datastructure that datomic uses"
 ;;; But doing it this way will probably always be more convenient from
 ;;; the REPL.
 ;;; And the main point behind this entire library is to set up the
-;;; platform defined in the schema namespace so you (or, really,
+;;; platform defined in your schema namespace so you (or, really,
 ;;; your customers) can use that as the foundation for the data
 ;;; they care about.
 
@@ -303,7 +311,8 @@ to the actual datastructure that datomic uses"
 
 ;; TODO: ^:always-validate
 (s/fdef install-schema!
-        :args (s/cat :uri-description :com.jimrthy.substratum.core/uri-description
+        :args (s/cat :logger ::log/entries
+                     :uri-description ::substratum/uri-description
                      ;; Q: Does this make any sense?
                      ;; It's a nice shortcut, but ::tx-dscr-seq
                      ;; specifically includes a ::partitions key for
@@ -315,65 +324,74 @@ to the actual datastructure that datomic uses"
                      :partition-name string?
                      :tx-description ::txn-dscr-seq)
         ;; Q: What does this return?
-        :ret any?)
+        :ret [any? ::log/entries])
 (defn install-schema!
-  [uri-description partition-name tx-description]
+  [logger uri-description partition-name tx-description]
   (let [uri (db/build-connection-string uri-description)
-        logger (LoggerFactory/getLogger "substratum-installer")]
-    (comment) (.debug logger (str "Expanding high-level schema transaction description:\n"
-                                  (util/pretty tx-description)))
-        (let [{:keys [structure data]} (expand-txn-descr tx-description)]
-          (comment) (.debug logger (str "Setting up schema using\n"
-                                        (util/pretty structure)
-                                        "at\n" uri))
-          (try
-            (if (s/valid? ::transaction-sequence structure)
-              (do
-                (doseq [step structure]
-                  (do-schema-installation uri partition-name structure))
-
-                ;; This has to happen as a Step 2:
-                ;; We can't assign attributes to entities until
-                ;; after the transaction that generates the schema
-                (db/upsert! uri data))
-              (throw (ex-info (str "Invalid transaction sequence:\n"
-                                   (s/explain ::transaction-sequence structure)
-                                   "Installing schema based on\n"
-                                   (util/pretty structure)
-                                   "\nwhich has" (count structure) "members")
-                              {:problem-tx tx-description
-                               :problem-struct structure
-                               :tx-dscr tx-description
-                               :uri uri
-                               :uri-description uri-description})))))))
+        logger (log/debug logger
+                          ::do!
+                          "Expanding high-level schema transaction description"
+                          tx-description)
+        [{:keys [structure data]} logger] (expand-txn-descr logger tx-description)
+        logger (log/debug logger
+                          ::do!
+                          "Setting up schema"
+                          {::structure structure
+                           ::uri uri})]
+        (try
+          (if (s/valid? ::transaction-sequence structure)
+            (let [[success logger]
+                  (reduce (fn [[logger acc]
+                               step]
+                            (let [[outcome logger] (do-schema-installation logger uri partition-name structure)]
+                              [(conj acc outcome) logger]))
+                          [logger []]
+                          structure)]
+              ;; This has to happen as a Step 2:
+              ;; We can't assign attributes to entities until
+              ;; after the transaction that generates the schema
+              [(db/upsert! uri data) logger])
+            (throw (ex-info (str "Invalid transaction sequence:\n"
+                                 (s/explain ::transaction-sequence structure)
+                                 "Installing schema based on\n"
+                                 (util/pretty structure)
+                                 "\nwhich has" (count structure) "members")
+                            {:problem-tx tx-description
+                             :problem-struct structure
+                             :tx-dscr tx-description
+                             :uri uri
+                             :uri-description uri-description}))))))
 
 (s/fdef install-platform!
-        :args (s/cat :uri-description ::database-definition))
+        :args (s/cat :logger ::log/entries
+                     :uri-description ::database-definition))
 (defn install-platform!
   "This installs the base-level datomic platform pieces"
-  [uri-description]
+  [logger uri-description]
   (let [details (schema/platform)]
-    (install-schema! uri-description
+    (install-schema! logger
+                     uri-description
                      (-> details :partitions first)
                      details)))
 
 (s/fdef install-schema-from-resource!
-        :args (s/cat :this ::database-schema)
-        :ret any?)
+        :args (s/cat :this ::database-schema
+                     :logger ::log/entries)
+        :ret [any? ::log/entries])
 (defn install-schema-from-resource!
-  [this]
+  [this logger]
   (let [uri-description (-> this :uri :description)
         resource-name (:schema-resource-name this)
-        partition-name (:partition-name this)
-        logger (LoggerFactory/getLogger "substratum-installer")]
+        partition-name (:partition-name this)]
     (comment (.debug logger (str "Installing schema for\n"
                                  (util/pretty this)
                                  "at" (util/pretty base-uri)
                                  "using" (-> uri-description :protocol)
                                  "\nfrom" resource-name)))
-    (if-let [tx-description (load-transactions-from-resource resource-name)]
-      (install-schema! uri-description partition-name tx-description)
-      (throw (ex-info (str "No transactions in " (:schema-resource-name this))
-                      {:missing-transactions this
-                       :resource-name (:schema-resource-name this)
-                       :keys (keys this)})))))
+    (let [[tx-description logger] (load-transactions-from-resource logger resource-name)]
+      (if tx-description
+        (install-schema! logger uri-description partition-name tx-description)
+        (throw (ex-info (str "No transactions in " (:schema-resource-name this))
+                        {:missing-transactions this
+                         :resource-name (:schema-resource-name this)
+                         :keys (keys this)}))))))

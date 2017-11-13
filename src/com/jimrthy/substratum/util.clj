@@ -2,7 +2,7 @@
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.pprint :refer (pprint)]
-            [clojure.spec :as s])
+            [clojure.spec.alpha :as s])
   (:import [java.util Iterator Date UUID]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -37,19 +37,6 @@
   "According to SO, this is the idiomatic way to get the current time."
   []
   (Date.))
-
-(defn log!
-  "Persist o for future reference.
-  Really should do something more involved.
-  Then again...we have commons-logging, log4j, and jboss.logging all available.
-  Which means this should probably just go away."
-  ([file-name o]
-   (let* [now (now)
-          msg (format "%tH:%tM:%tS.%tL - %s%n" now now now now (str o))]
-     (spit file-name msg :append true)
-     msg))
-  ([o]
-   (log! "substratum.log" o)))
 
 (defn extract-from-node
   "Find the first (depth-first) child of node that matches key.

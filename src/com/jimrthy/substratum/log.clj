@@ -21,21 +21,21 @@
 
 (s/def ::message string?)
 
-(s/def ::details map?)
+(s/def ::details any?)
 
-(s/def ::log-entry (s/keys :req [::level
-                                 ::label
-                                 ::time
-                                 ::message]
-                           :opt [::details]))
+(s/def ::entry (s/keys :req [::level
+                             ::label
+                             ::time
+                             ::message]
+                       :opt [::details]))
 
-(s/def ::log-entries (s/coll-of ::log-entry))
+(s/def ::entries (s/coll-of ::entry))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
 
-(s/fdef log :args (s/cat :entries ::log-entries
+(s/fdef log :args (s/cat :entries ::entries
                          :level ::level
                          :message ::message
                          :details ::details))
@@ -76,6 +76,7 @@
            message#]
           (add-log-entry entries# ~'~tag-holder label# message#)))))
   (let [tag (keyword (str *ns*) (name level))]
+    ;; The auto-gensymmed parameter names are obnoxious
     `(defn ~level
        ([entries#
          label#
@@ -90,14 +91,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public
 
-(comment
-  (macroexpand-1 '(deflogger info))
-  (deflogger quux)
-  quux
-  ;; Ah, the joy of macros.
-  ;; This just defines a logging function named lvl several times
-  (doseq [lvl log-levels]
-    (deflogger lvl)))
 (deflogger trace)
 (deflogger debug)
 (deflogger info)
@@ -118,7 +111,7 @@
 
 (s/fdef flush-logs
         :args (s/cat :logger #(satisfies? Logger %)
-                     :logs ::log-entries))
+                     :logs ::entries))
 (defn flush-logs
   "For the side-effects to write the accumulated logs"
   [logger
