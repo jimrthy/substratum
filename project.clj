@@ -1,10 +1,10 @@
 (defproject com.jimrthy.substratum "0.1.0-SNAPSHOT"
-  :dependencies [[com.datomic/datomic-free "0.9.5407" :exclusions [org.clojure/tools.cli]]
+  :dependencies [[com.datomic/datomic-free "0.9.5561.62" :exclusions [org.clojure/tools.cli]]
                  ;; Since this is supposed to be a library,
                  ;; I really shouldn't even depend on either
                  ;; of these
                  [com.jimrthy/component-dsl "0.1.2-SNAPSHOT"  :exclusions [com.google.guava/guava]]
-                 [com.stuartsierra/component "0.3.1"]
+                 [com.stuartsierra/component "0.3.2"]
                  ;; Q: How much value-add do I get here?
                  ;; A: Not enough.
                  ;; If end-users want to do attribute schema
@@ -22,9 +22,9 @@
                  ;; There should be plenty of time to make it useful
                  ;; for others after it's useful for me.
                  ;; So just port what I've already written.
-                 [io.rkn/conformity "0.4.0"]
+                 [io.rkn/conformity "0.5.1"]
                  [org.clojure/clojure "1.9.0-alpha14"]
-                 [org.clojure/core.async "0.2.395"]
+                 [org.clojure/core.async "0.3.443"]
                  [org.clojure/tools.cli "0.3.5"]]
   :description "Data Platform on Datomic"
   :license {:name "Eclipse Public License"
