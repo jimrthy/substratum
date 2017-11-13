@@ -23,7 +23,8 @@
                  ;; for others after it's useful for me.
                  ;; So just port what I've already written.
                  [io.rkn/conformity "0.5.1"]
-                 [org.clojure/clojure "1.9.0-alpha14"]
+                 [org.clojure/clojure "1.9.0-RC1"]
+                 [org.clojure/spec.alpha "0.1.143"]
                  [org.clojure/core.async "0.3.443"]
                  [org.clojure/tools.cli "0.3.5"]]
   :description "Data Platform on Datomic"
