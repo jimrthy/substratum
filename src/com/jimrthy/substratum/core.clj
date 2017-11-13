@@ -4,13 +4,12 @@
 There might be some justification for splitting some of these
 pieces from platform. But anything I don't move into there should
 probably get moved into, say, _impl"
-  (:require [clojure.spec :as s]
+  (:require [clojure.spec.alpha :as s]
+            [com.jimrthy.substratum.log :as log]
             [com.jimrthy.substratum.util :as util]
-            [com.stuartsierra.component :as component]
             [datomic.api :as d])
   (:import [datomic Datom]
-           [datomic.db Db DbId]
-           [org.slf4j LoggerFactory]))
+           [datomic.db Db DbId]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specs
@@ -105,8 +104,12 @@ probably get moved into, say, _impl"
 (s/def ::transaction-result (s/keys :req-un [::db-before ::db-after ::tx-data ::temp-ids]))
 
 (s/def ::description ::possible-uri-descriptions)
+;; TODO: Is there something like a regex that would be useful for this?
 (s/def ::connection-string string?)
-(s/def ::url (s/keys :req-un [::description ::connection-string]))
+
+(s/def ::db-url (s/keys :opt [::connection-string
+                              ::connection]
+                        :req [::description]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
@@ -196,47 +199,32 @@ Q: Are those assumptions about multiple connections still true?"
   (general-disconnect descr))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Component
+;;; Public
 
-;;; TODO: Come up with a better/less contentious name
-(defrecord URL [description
-                connection-string
-                logger]
-  component/Lifecycle
-  (start
-    [this]
+(s/fdef start
+        :args (s/cat :logger ::log/entries
+                     :connection-description ::description)
+        :ret (s/tuple ::db-url ::log/entries))
+(defn start!
     "Main point is to verify that we can connect
 Although this also serves to create the database
 if it doesn't already exast and cache the connection"
-    (let [logger (LoggerFactory/getLogger URL)]
-      (comment) (.debug logger (str "Starting up the URL. Description: "
-                                    (util/pretty description)
-                                    "with keys:" (keys description)))
-      (let [connection-string (build-connection-string description)]
-        (when (d/create-database connection-string)
-          (.warn logger "Created new database"))
-        (d/connect connection-string)
-        (assoc this
-               :connection-string connection-string
-               :logger logger))))
-  (stop
-   [this]
-   (disconnect description)
-   ;; Can't just dissoc...that would return
-   ;; an ordinary map that couldn't be started
-   ;; At least, that seems to be what I'm picking up
-   ;; from the mailing list
-   (assoc this :connection-string nil)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Public
-
-(s/fdef uri-ctor
-        :args (s/cat :description (s/map-of #(= :description %) ::possible-uri-descriptions))
-        :ret ::url)
-(defn uri-ctor
-  [description]
-  (map->URL description))
+  [logger description]
+  (let [log-messages (log/debug logger
+                                ::lifecycle.start
+                                "Starting a database connection"
+                                description)
+        connection-string (build-connection-string description)]
+    (let [log-messages
+          (if (d/create-database connection-string)
+            (log/warn logger
+                      ::lifecycle.start
+                      "Created new database")
+            log-messages)]
+      [{::connection (d/connect connection-string)
+        ::connection-string connection-string
+        ::description description}
+       log-messages])))
 
 (s/fdef q
         :args (s/cat :query ::datomic-query
