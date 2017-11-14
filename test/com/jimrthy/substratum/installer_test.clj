@@ -1,13 +1,13 @@
 (ns com.jimrthy.substratum.installer-test
   "Unit testing the database is generally considered a bad idea, but I have to start somewhere"
   (:require [clojure.pprint :refer (pprint)]
-            [clojure.spec :as s]
-            [clojure.test :refer (are deftest is testing use-fixtures)]
+            [clojure.spec.alpha :as s]
+            [clojure.test :refer (are deftest is testing)]
             [com.jimrthy.substratum.core :as db]
             [com.jimrthy.substratum.installer :as installer]
+            [com.jimrthy.substratum.log :as log]
+            [com.jimrthy.substratum.schema :as schema]
             [com.jimrthy.substratum.util :as util]
-            [com.stuartsierra.component :as component]
-            [component-dsl.system :as cpt-dsl]
             [datomic.api :as d]
             [datomic-schema.schema :refer (defdbfn
                                             fields
@@ -17,17 +17,7 @@
                                             schema)]
             [io.rkn.conformity :as conformity])
   (:import [clojure.lang ExceptionInfo IExceptionInfo]
-           [datomic.impl Exceptions$IllegalArgumentExceptionInfo]
-           [org.slf4j LoggerFactory]))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Globals
-;;; Because it doesn't seem worth the time to figure out how
-;;; to do this correctly
-;;; (the problem is that tests don't accept any parameters,
-;;; but I really need to pass a new system to each)
-;;; TODO: Switch to the cpt-dsl "global" system closure/monadic thing
-(def system nil)
+           [datomic.impl Exceptions$IllegalArgumentExceptionInfo]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Boilerplate
@@ -35,10 +25,11 @@
 (defn system-for-testing
   "Note that these are simulating records. Which means the keys can't be namespaced"
   []
-  (let [base-system (cpt-dsl/ctor "admin.test-system.edn")
-        uri (db/uri-ctor {:description {:db-name (str (gensym))
-                                        :protocol :ram}})]
-    (assoc base-system :database-uri uri)))
+  (let [platform-schema (schema/platform)
+        uri-dscr {::db/db-name (str "hand-written-test-" (gensym))
+                                        ::db/protocol ::db/ram}]
+    {::schema platform-schema
+     ::uri-dscr uri-dscr}))
 (comment
   (let [tester (system-for-testing)]
     (println (keys tester))))
@@ -46,31 +37,55 @@
 (defn in-mem-db-system
   "The really annoying thing about this approach is that I
 can't just call the individual tests manually"
-  [f]
+  [logger]
   (try
-    (let [pre-testable-system (system-for-testing)
-          logger (LoggerFactory/getLogger "substratum.installer-test/in-mem-db-system")]
+    (let [{:keys [::schema
+                  ::uri-dscr]
+           :as pre-testable-system} (system-for-testing)
+          [uri logs] (db/start! logger uri-dscr)]
       ;; Most tests probably make sense to run against that
-      ;; TODO: Add test features
+      ;; TODO: Add test features (Q: did I mean schema?)
       (try
-        (let [started-system (component/start pre-testable-system)]
-          (println "Started System:" (map (partial str "\n") started-system) \newline)
-          (try
-            (alter-var-root #'system (constantly started-system))
-            (f)
-            (catch RuntimeException ex
-              (.error logger (str ex "\n"
-                                  (.getStackTrace ex)
-                                  "\nFAIL")))
-            (finally
-              ;; Better safe than sorry
-              (let [stopped (component/stop started-system)]
-                (alter-var-root #'system (constantly stopped))))))
+        (let [logs (log/info logs
+                             ::message "Started System"
+                             (map (partial str "\n") pre-testable-system))]
+          (assoc pre-testable-system
+                 ::uri uri
+                 ::logs logs))
         (catch RuntimeException ex
-          (.error logger (str ex
-                              (.getStackTrace ex)
-                              "\nSetting up baseline admin system")))))))
-(use-fixtures :each in-mem-db-system)
+          ;; Major flaw with this approach:
+          ;; Any logs leading up to the exception are lost.
+          ;; That puts a higher premium on error handling.
+          {::logs (log/exception logs
+                                 ex
+                                 ::basic-connection
+                                 "FAIL")})))))
+(comment
+  (let [system (in-mem-db-system [])]
+    (keys system)
+    #_(->> system
+         ::logs
+         (filter (fn [{:keys [::log/level]
+                       :as log}]
+                   (println "Was\n" log "\nan error?")
+                   (#{::log/error
+                      ::log/exception
+                      ::log/fatal} level))))
+    #_(::uri system))
+  )
+
+(defn clean-up
+  [{:keys [::uri-dscr]
+    :as system} logs]
+  (db/disconnect uri-dscr)
+  (let [log-fx (log/->StdOutLogger)]
+    ;; Test for any logging errors
+    (is (not (seq (filter (fn [{:keys [::log/level]}]
+                            (#{::log/error
+                               ::log/exception
+                               ::log/fatal} level))
+                          logs))))
+    (log/flush-logs! log-fx logs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
@@ -79,11 +94,10 @@ can't just call the individual tests manually"
         :ret string?)
 (defn extract-connection-string
   "Pull the connection string from the system."
-  []
+  [{:keys [::uri]
+    :as system}]
   {:post [string?]}
-  (let [dscr (-> system :database-uri :description)
-        result (db/build-connection-string dscr)]
-    result))
+  (::db/connection-string uri))
 
 (defn test-partition
   []
@@ -216,69 +230,89 @@ And it's probably a prime example of why unit testing your database
 is a bad idea.
 
 But, seriously. I had to start somewhere."
-  (let [cxn-str (extract-connection-string)
-        ;; TODO: Don't do this here
-        ;; Q: Well, then, where?
-        structural-txn (base-part-and-data-type-txn)
-        sql (base-datatype-query)
-        initial-txn (base-datatype-txn)]
-    (is (not (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt)))
+  (let [logs (atom [])
+        system (in-mem-db-system @logs)]
+    (reset! logs (::logs system))
     (try
-      (db/q sql cxn-str)
-      ;; That should throw...something
-      (is false)
-      (catch Exception ex
-        ;; This is the expected course of events.
-        ;; Although the fact that they're throwing a raw Exception is
-        ;; pretty annoying
-        (let [cause (.getCause ex)
-              root-cause (.getCause cause)
-              base-details {:instance cause
-                            :class (class cause)
-                            :message (.getMessage cause)
-                            :cause root-cause}
-              details {:instance ex
-                       :class (class ex)
-                       :message (.getMessage ex)
-                       :cause cause}
-              cause-of-root (.getCause root-cause)  ; yes, this is ugly
-              root-details {:instance root-cause
-                            :class (class root-cause)
-                            :message (.getMessage root-cause)
-                            :cause root-cause}]
-          ;; Verify that ex matches the "no such attribute" error
-          (is (nil? cause-of-root))
-          (is (= (:class root-details) Exceptions$IllegalArgumentExceptionInfo))
-          (is (= ":db.error/not-an-entity Unable to resolve entity: :dt/dt" (:message root-details))))
-        (println "Getting ready to try to run conformity on:\n"
-                 structural-txn)
-        (let [migration-success
-              (installer/do-schema-installation cxn-str "silly-test" structural-txn)]
-          (is migration-success)
-          ;; Digging into this level of detail is really unit-testing
-          ;; conformity. Which is worse than silly.
-          (doseq [result-detail migration-success]
-            (is (:tx-result result-detail))))
+      (is (::uri system))
+      (when (::uri system)
+        (let [cxn-str (extract-connection-string system)
+              ;; TODO: Don't do this here
+              ;; Q: Well, then, where?
+              structural-txn (base-part-and-data-type-txn)
+              sql (base-datatype-query)
+              initial-txn (base-datatype-txn)]
+          (is (not (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt)))
+          (testing "Query against bad attributes"
+            (try
+              (db/q cxn-str sql)
+              ;; That should throw...something
+              (is false "Should not be able to query against missing attributes")
+              (catch Exception ex
+                ;; This is the expected course of events.
+                ;; Although the fact that they're throwing a raw Exception is
+                ;; pretty annoying
+                (let [cause (.getCause ex)
+                      root-cause (.getCause cause)
+                      base-details {:instance cause
+                                    :class (class cause)
+                                    :message (.getMessage cause)
+                                    :cause root-cause}
+                      details {:instance ex
+                               :class (class ex)
+                               :message (.getMessage ex)
+                               :cause cause}
+                      cause-of-root (.getCause root-cause)  ; yes, this is ugly
+                      root-details {:instance root-cause
+                                    :class (class root-cause)
+                                    :message (.getMessage root-cause)
+                                    :cause root-cause}]
+                  ;; Verify that ex matches the "no such attribute" error
+                  (is (nil? cause-of-root))
+                  (is (= (:class root-details) Exceptions$IllegalArgumentExceptionInfo))
+                  (is (= ":db.error/not-an-entity Unable to resolve entity: :dt/dt" (:message root-details))))
 
-        (testing ":dt/dt attribute added successfully"
-          (is (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt)))
-        (testing "No datatypes installed yet"
-          (let [datatypes (db/q sql cxn-str)]
-            (is (= 0 (count datatypes)))))
-        (testing "Defining 1 datatype"
-          (let [;; This does the deref for us
-                insertion (db/upsert! cxn-str initial-txn)]
-            (let [datatypes (db/q sql cxn-str)]
-              (is (= 1 (count datatypes)))))))
-      (catch Throwable ex
-        (throw (ex-info
-                (.getMessage ex)
-                {:unexpected ex
-                 :connection-string cxn-str
-                 :query sql
-                 :system system}))))))
+
+                (swap! logs
+                       log/info
+                       ::test.datatype-schema
+                       "Getting ready to try to run conformity on"
+                       structural-txn)
+                (let [[migration-success logs']
+                      (installer/do-schema-installation @logs cxn-str "silly-test" structural-txn)]
+                  (reset! logs logs')
+                  (is migration-success)
+                  ;; Digging into this level of detail is really unit-testing
+                  ;; conformity. Which is worse than silly.
+                  (doseq [result-detail migration-success]
+                    (is (:tx-result result-detail))))
+
+                (testing ":dt/dt attribute added successfully"
+                  (is (conformity/has-attribute? (-> cxn-str d/connect d/db) :dt/dt)))
+                (testing "No datatypes installed yet"
+                  (let [datatypes (db/q cxn-str sql)]
+                    (is (= 0 (count datatypes)))))
+                (testing "Defining 1 datatype"
+                  (let [;; This does the deref for us
+                        insertion (db/upsert! cxn-str initial-txn)]
+                    (let [datatypes (db/q cxn-str sql)]
+                      (is (= 1 (count datatypes)))))))
+              (catch Throwable ex
+                (swap! logs
+                       log/exception
+                       ex
+                       (ex-info
+                        (.getMessage ex))
+                       ::test.datatype-schema
+                       "Unhandled Exception"
+                       {::connection-string cxn-str
+                        ::query sql
+                        ::system system}))))))
+      (finally
+        (clean-up system @logs)))))
 
 (deftest check-edn-install
+  (throw (RuntimeException. "Wrap in functional fixtures"))
   (testing "Make sure the schema.edn does what I expect"
     (let [cxn-str (extract-connection-string)
           ;; Really shouldn't be caching this,
@@ -374,6 +408,7 @@ But, seriously. I had to start somewhere."
                (println (ex-data ex))))))
 
 (deftest attribute-expansion
+  (throw (RuntimeException. "Wrap in functional fixtures"))
   (testing "My translation of Yuppiechef macros into functions that work on EDN"
     (let [baseline [(schema dt (fields [dt :ref "Think of an object's class"]
                                        [namespace :string "package"]

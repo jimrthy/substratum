@@ -66,7 +66,7 @@ Ryan Kneufield in datomic-schema and conformity to keep this compact.
 
 ## License
 
-Copyright © 2016 James Gatannah
+Copyright © 2016-2017 James Gatannah
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.

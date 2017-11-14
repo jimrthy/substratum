@@ -34,7 +34,7 @@ probably get moved into, say, _impl"
 
 (s/def ::free-uri-description ::describe-uri-with-port)
 
-(s/def ::sql-driver #{:postgres})
+(s/def ::sql-driver #{::postgres})
 (s/def ::user string?)
 (s/def ::password string?)
 ;; This depends on the JDBC part of the connection.
@@ -54,13 +54,13 @@ probably get moved into, say, _impl"
   ::sql-uri-description)
 (s/def ::possible-uri-descriptions (s/multi-spec uri-types :protocol))
 
-(defmulti build-connection-string-types :protocol)
-(defmulti build-connection-string :protocol)
-(s/def ::connection-string-builder-types (s/multi-spec build-connection-string-types :protocol))
+(defmulti build-connection-string-types ::protocol)
+(defmulti build-connection-string ::protocol)
+(s/def ::connection-string-builder-types (s/multi-spec build-connection-string-types ::protocol))
 
-(defmulti disconnect-type :protocol)
-(defmulti disconnect :protocol)
-(s/def ::disconnect-types (s/multi-spec disconnect-type :protocol))
+(defmulti disconnect-type ::protocol)
+(defmulti disconnect ::protocol)
+(s/def ::disconnect-types (s/multi-spec disconnect-type ::protocol))
 
 ;;; TODO: Surely these have already been captured somewhere
 
@@ -78,7 +78,6 @@ probably get moved into, say, _impl"
 (s/def ::datomic-query (s/keys :req-un [::find ::where]
                                :opt-un [::in]))
 
-;; Q: Do I need to create a db namespace for this?
 (s/def :db/id (s/or :id #(instance? DbId %)
                     :keyword keyword?))
 (s/def ::base-transaction (s/keys :req [:db/id]))
@@ -118,7 +117,7 @@ probably get moved into, say, _impl"
   [_]
   ::free-uri-description)
 (defmethod build-connection-string ::free
-  [{:keys [db-name host port]
+  [{:keys [::db-name ::host ::port]
     :or {host "localhost"
          ;; TODO: Verify that this is the default
          port 4334}}]
@@ -127,8 +126,8 @@ probably get moved into, say, _impl"
 (defmethod build-connection-string-types ::ram
   [_]
   ::in-memory-uri-description)
-(defmethod build-connection-string :ram
-  [{:keys [db-name] :as args}]
+(defmethod build-connection-string ::ram
+  [{:keys [::db-name] :as args}]
   (when-not db-name
     (throw (ex-info "Missing database name" args)))
   (str "datomic:mem://" db-name))
@@ -140,38 +139,39 @@ probably get moved into, say, _impl"
   "Return the string representation of a JDBC driver"
   [driver-key]
   ;; Q: ms?
-  ;; Note that this is really much more interesting.
-  (let [ms {:postgres "postgresql"}]
+  ;; Note that this should really be much more interesting,
+  ;; with an entire slew of options.
+  (let [ms {::postgres "postgresql"}]
     (ms driver-key)))
 
-(defmethod build-connection-string-types :sql
+(defmethod build-connection-string-types ::sql
   [_]
   ::sql-uri-description)
-(defmethod build-connection-string :sql
-  [{:keys [db-name port driver user password server]
+(defmethod build-connection-string ::sql
+  [{:keys [::db-name ::port ::driver ::user ::password ::server]
     :or {port 5432
          user "datomic"
          password "datomic"
          server "localhost"}
     :as descr}]
   (when-not driver
-    (throw (ex-info "missing-driver" {:description descr})))
+    (throw (ex-info "missing-driver" {::description descr})))
   ;; Next construct is weird because I've shadowed a builtin
   (str "datomic:sql://" db-name "?jdbc:" (sql-driver driver)
        "://" server ":" port "/datomic?user="
        user "&password=" password))
 
-(defmethod disconnect-type :ram
+(defmethod disconnect-type ::ram
   [_]
   ::in-memory-uri-description)
-(defmethod disconnect :ram
+(defmethod disconnect ::ram
   [descr]
   ;; We really don't want to keep a reference around to these
   (let [cxn-str (build-connection-string descr)]
     (d/delete-database cxn-str)))
 
 (s/fdef general-disconnect
-        :args ::possible-uri-descriptions
+        :args (s/cat :uri ::possible-uri-descriptions)
         ;; Q: What does this return?
         :ret any?)
 (defn general-disconnect
@@ -189,19 +189,19 @@ Q: Are those assumptions about multiple connections still true?"
   [descr]
   (-> descr build-connection-string d/connect d/release))
 
-(defmethod disconnect-type :sql
+(defmethod disconnect-type ::sql
   [_]
   ;; The original schema for this specified possible-uri-descriptions.
   ;; Q: Why that instead of this?
   ::sql-uri-description)
-(defmethod disconnect :sql
+(defmethod disconnect ::sql
   [descr]
   (general-disconnect descr))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public
 
-(s/fdef start
+(s/fdef start!
         :args (s/cat :logger ::log/entries
                      :connection-description ::description)
         :ret (s/tuple ::db-url ::log/entries))
@@ -227,19 +227,19 @@ if it doesn't already exast and cache the connection"
        log-messages])))
 
 (s/fdef q
-        :args (s/cat :query ::datomic-query
-                     :uri ::connection-string)
+        :args (s/cat :uri ::connection-string
+                     :query ::datomic-query)
         ;; Q: What do I know about the actual return results?
         ;; A: Well, it's actually a seq of seqs. Where the inner seq matches the query's :find
         ;; clause. That seems worth encoding formally.
         :ret (s/coll-of any?))
 (defn q
   "Convenience function for querying the database.
-Probably shouldn't actually use very often.
+  Probably shouldn't actually use very often.
 
-In general, we should probably be running queries against database values
-using d/q. But this approach does save some typing"
-  [query uri]
+  In general, we should probably be running queries against database values
+  using d/q. But this approach does save some typing"
+  [uri query]
   (d/q query (-> uri d/connect d/db)))
 
 (s/fdef pretend-upsert!

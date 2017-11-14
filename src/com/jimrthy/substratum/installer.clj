@@ -135,8 +135,8 @@ in that direction."
 
 ;; Q: Are these next two even vaguely close to reality?
 ;; I'm really trying to reverse-engineer what's going on inside here
-(s/def ::structure ::transaction-sequence)
-(s/def ::data ::transaction-sequence)
+(s/def ::structure ::txn-sequence)
+(s/def ::data ::txn-sequence)
 (s/def ::platform-txns (s/keys :req [::structure ::data]))
 
 (s/def ::norm-name (s/or :string string?

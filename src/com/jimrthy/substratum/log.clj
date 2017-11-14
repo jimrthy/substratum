@@ -1,17 +1,18 @@
 (ns com.jimrthy.substratum.log
   "Accumulate batches of logs. Do the side-effects later in isolation"
   (:require [clojure.spec.alpha :as s])
-  (:import java.io.OutputStream))
-
+  (:import clojure.lang.ExceptionInfo
+           java.io.OutputStream))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specs
 
 (def log-levels #{::trace
-                 ::debug
-                 ::info
-                 ::warn
-                 ::error
-                 ::fatal})
+                  ::debug
+                  ::info
+                  ::warn
+                  ::error
+                  ::exception
+                  ::fatal})
 (s/def ::level log-levels)
 
 (s/def ::label keyword?)
@@ -31,6 +32,10 @@
 
 (s/def ::entries (s/coll-of ::entry))
 
+;;; Implement this for your side-effects
+(defprotocol Logger
+  (log! [this msg])
+  (flush! [this]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Internal
@@ -88,6 +93,31 @@
          message#]
         (add-log-entry entries# ~tag label# message#)))))
 
+(defrecord StreamLogger [stream]
+  ;; I think this is mostly correct,
+  ;; but I haven't actually tried testing it
+  Logger
+  (log! [{^OutputStream stream :stream
+         :as this}
+        msg]
+    (.write stream (pr-str msg)))
+  (flush! [{^OutputStream stream :stream
+            :as this}]
+    (.flush stream)))
+
+(defrecord StdOutLogger []
+  ;; Really just a StreamLogger
+  ;; where stream is STDOUT.
+  ;; But it's simple/easy enough that it seemed
+  ;; worth writing this way instead
+  Logger
+  (log! [_ msg]
+    (println (pr-str msg)))
+  (flush! [_]
+    ;; Q: Is there any point to calling .flush
+    ;; on STDOUT?
+    ))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public
 
@@ -96,25 +126,28 @@
 (deflogger info)
 (deflogger warn)
 (deflogger error)
+
+(defn exception
+  ([entries ex label message]
+   (exception entries ex label message nil))
+  ([entries ex label message original-details]
+   (let [details {::original-details original-details
+                  ::stack (.getStackTrace ex)
+                  ::exception ex}
+         details (if (instance? ExceptionInfo ex)
+                   (assoc details ::data (.getData ex))
+                   details)]
+     (add-log-entry entries ::exception label message details))))
+
 (deflogger fatal)
 
-;;; Implement this for your side-effects
-(defprotocol Logger
-  (log [this msg]))
-
-(defrecord StreamLogger [stream]
-  Logger
-  (log [{^OutputStream stream :stream
-         :as this}
-        msg]
-    (.write stream (pr-str msg))))
-
-(s/fdef flush-logs
+(s/fdef flush-logs!
         :args (s/cat :logger #(satisfies? Logger %)
                      :logs ::entries))
-(defn flush-logs
+(defn flush-logs!
   "For the side-effects to write the accumulated logs"
   [logger
    log-collection]
   (doseq [message log-collection]
-    (log logger message)))
+    (log! logger message))
+  (flush! logger))
