@@ -312,27 +312,38 @@ But, seriously. I had to start somewhere."
         (clean-up system @logs)))))
 
 (deftest check-edn-install
-  (throw (RuntimeException. "Wrap in functional fixtures"))
-  (testing "Make sure the schema.edn does what I expect"
-    (let [cxn-str (extract-connection-string)
-          ;; Really shouldn't be caching this,
-          ;; at least in theory. But it seems
-          ;; silly not to, in practice.
-          ;; It's not like I'm actively passing it around
-          ;; anywhere else
-          conn (d/connect cxn-str)]
-      (when (conformity/has-attribute? (d/db conn) :dt/dt)
-        (throw (ex-info (str "Database at "
-                             cxn-str
-                             "\nalready has the :dt/dt attribute\n"
-                             "How did this happen?!")
-                        {:connection-string cxn-str
-                         :system system})))
-      (let [dscr {:uri (:database-uri system)
-                  :schema-resource-name "test-schema.edn"
-                  :partition-name "Basic EDN Installation"}]
-        (installer/install-schema-from-resource! dscr))
-      (is (conformity/has-attribute? (d/db conn) :dt/dt)))))
+  (let [logs (atom [])
+        system (in-mem-db-system @logs)]
+    (reset! logs (::logs system))
+    (try
+      (testing "Make sure the schema.edn does what I expect"
+        (let [cxn-str (extract-connection-string system)
+              ;; Really shouldn't be caching this,
+              ;; at least in theory. But it seems
+              ;; silly not to, in practice.
+              ;; It's not like I'm actively passing it around
+              ;; anywhere else
+              conn (d/connect cxn-str)]
+          (when (conformity/has-attribute? (d/db conn) :dt/dt)
+            (throw (ex-info (str "Database at "
+                                 cxn-str
+                                 "\nalready has the :dt/dt attribute\n"
+                                 "How did this happen?!")
+                            {::connection-string cxn-str
+                             ::system system})))
+          (let [dscr {::db/database-uri (::uri-dscr system)
+                      ::db/protocol ::db/ram
+                      ::db/schema-resource-name "test-schema.edn"
+                      ::db/partition-name "Basic EDN Installation"}]
+            (println "Calling scema installation with\n"
+                     (util/pretty dscr))
+            (comment (throw (Exception. "Skip the rest")))
+            (installer/install-schema-from-resource! dscr #_(assoc system
+                                                                   ::db/schema-resource-name "test-schema.edn")
+                                                     @logs))
+          (is (conformity/has-attribute? (d/db conn) :dt/dt))))
+      (finally
+        (clean-up system @logs)))))
 
 (deftest data-platform-basics
   (testing "Basic data platform installation"

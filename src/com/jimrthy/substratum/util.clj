@@ -25,10 +25,11 @@
         :ret any?)
 (defn load-resource
   [url]
-  (-> url
-      clojure.java.io/resource
-      slurp
-      edn/read-string))
+  (if-let [resource (clojure.java.io/resource url)]
+    (let [s (slurp resource)]
+      (edn/read-string s))
+    (throw (ex-info "Missing resource at URL"
+                    {::location url}))))
 
 (s/fdef now
         :args (s/cat)

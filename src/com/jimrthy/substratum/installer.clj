@@ -16,6 +16,7 @@ in that direction."
                                            fields]
              :as yuppie-schema]
             [com.jimrthy.substratum.core :as db]
+            [com.jimrthy.substratum.log :as log]
             [com.jimrthy.substratum.schema :as schema]
             [com.jimrthy.substratum.util :as util]
             [io.rkn.conformity :as conformity])
@@ -199,13 +200,13 @@ in that direction."
       ;; Returns nil on success
       [result logger])))
 
-(s/fdef load-transactions-from-resource
+(s/fdef load-transactions-from-resource!
         :args (s/cat :logger ::log/log-entries
                      :resource-name string?)
         :ret [::txn-dscr-seq ::log/log-entries])
-(defn load-transactions-from-resource
-  [logger
-   resource-name]
+(defn load-transactions-from-resource!
+  [resource-name
+   logger]
   (let [logger
         (log/debug logger
                    ::load-txns
@@ -345,7 +346,7 @@ to the actual datastructure that datomic uses"
                           {::structure structure
                            ::uri uri})]
         (try
-          (if (s/valid? ::transaction-sequence structure)
+          (if (s/valid? ::txn-sequence structure)
             (let [[success logger]
                   (reduce (fn [[logger acc]
                                step]
@@ -358,7 +359,8 @@ to the actual datastructure that datomic uses"
               ;; after the transaction that generates the schema
               [(db/upsert! uri data) logger])
             (throw (ex-info (str "Invalid transaction sequence:\n"
-                                 (s/explain ::transaction-sequence structure)
+                                 (util/pretty
+                                  (s/explain-data ::txn-sequence structure))
                                  "Installing schema based on\n"
                                  (util/pretty structure)
                                  "\nwhich has" (count structure) "members")
@@ -385,19 +387,46 @@ to the actual datastructure that datomic uses"
                      :logger ::log/entries)
         :ret [any? ::log/entries])
 (defn install-schema-from-resource!
-  [this logger]
-  (let [uri-description (-> this :uri :description)
-        resource-name (:schema-resource-name this)
-        partition-name (:partition-name this)]
-    (comment (.debug logger (str "Installing schema for\n"
-                                 (util/pretty this)
-                                 "at" (util/pretty base-uri)
-                                 "using" (-> uri-description :protocol)
-                                 "\nfrom" resource-name)))
-    (let [[tx-description logger] (load-transactions-from-resource logger resource-name)]
-      (if tx-description
-        (install-schema! logger uri-description partition-name tx-description)
-        (throw (ex-info (str "No transactions in " (:schema-resource-name this))
-                        {:missing-transactions this
-                         :resource-name (:schema-resource-name this)
-                         :keys (keys this)}))))))
+  [{:keys [::db/uri
+           ::db/partition-name
+           ::db/protocol
+           ::db/schema-resource-name]
+    :as this} logs]
+  (let [uri-description (::db/description uri)
+        logs (log/debug logs
+                        ::schema
+                        "Installing"
+                        {::description this
+                         ::uri uri
+                         ::protocol protocol
+                         ::resource-file schema-resource-name})]
+    (try
+      (let [[tx-description logs] (load-transactions-from-resource! schema-resource-name logs)]
+        (if tx-description
+          (try
+            (install-schema! logs
+                             #_uri-description (::db/database-uri this)
+                             partition-name
+                             tx-description)
+            (catch IllegalArgumentException ex
+              (let [logs (log/exception logs
+                                        ex
+                                        ::installation
+                                        "Schema failed"
+                                        {::uri-description uri-description
+                                         ::uri uri
+                                         ::system this})]
+                (throw (ex-info "Installation error"
+                                {::logs logs})))))
+          (throw (ex-info (str "No transactions in " schema-resource-name)
+                          {::missing-transactions this
+                           ::resource-name schema-resource-name
+                           ::logs logs
+                           ::keys (keys this)}))))
+      (catch NullPointerException ex
+        (throw (ex-info "Missing resource to load"
+                        {::logs (log/exception logs
+                                               ex
+                                               ::load-resource
+                                               "Not specified"
+                                               this)}))))))
