@@ -311,6 +311,14 @@ But, seriously. I had to start somewhere."
       (finally
         (clean-up system @logs)))))
 
+(deftest schema-resource
+  (let [[tx-dscr logs]
+        (installer/load-transactions-from-resource!
+         "test-schema.edn" [])]
+    (is (not tx-dscr))
+    (is (s/valid? ::installer/txn-sequence (::installer/structure tx-dscr)))
+    (is (s/valid? ::db/upsert-txns (::installer/data tx-dscr)))))
+
 (deftest check-edn-install
   (let [logs (atom [])
         system (in-mem-db-system @logs)]
@@ -320,9 +328,12 @@ But, seriously. I had to start somewhere."
         (let [cxn-str (extract-connection-string system)
               ;; Really shouldn't be caching this,
               ;; at least in theory. But it seems
-              ;; silly not to, in practice.
+              ;; silly not to, for this use case.
               ;; It's not like I'm actively passing it around
-              ;; anywhere else
+              ;; anywhere else.
+              ;; The peer API caches it for us, so doing it
+              ;; here is really just a matter of reducing
+              ;; duplicated code.
               conn (d/connect cxn-str)]
           (when (conformity/has-attribute? (d/db conn) :dt/dt)
             (throw (ex-info (str "Database at "
@@ -335,11 +346,7 @@ But, seriously. I had to start somewhere."
                       ::db/protocol ::db/ram
                       ::db/schema-resource-name "test-schema.edn"
                       ::db/partition-name "Basic EDN Installation"}]
-            (println "Calling scema installation with\n"
-                     (util/pretty dscr))
-            (comment (throw (Exception. "Skip the rest")))
-            (installer/install-schema-from-resource! dscr #_(assoc system
-                                                                   ::db/schema-resource-name "test-schema.edn")
+            (installer/install-schema-from-resource! dscr
                                                      @logs))
           (is (conformity/has-attribute? (d/db conn) :dt/dt))))
       (finally

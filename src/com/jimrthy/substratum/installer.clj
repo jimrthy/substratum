@@ -37,7 +37,7 @@ in that direction."
 ;; It's tempting to make (start) convert the uri to a connection-string.
 ;; That temptation seems like a mistake.
 (s/def ::database-schema (s/merge ::database-definition
-                                  (s/keys :req-un [::schema-resource-name])))
+                                  (s/keys :req [::db/schema-resource-name])))
 ;; The parameters to create that
 (s/def ::opt-database-schema (s/keys :opt-un [::schema-resource-name
                                               :com.jimrthy.substratum.core/uri]))
@@ -387,10 +387,11 @@ to the actual datastructure that datomic uses"
                      :logger ::log/entries)
         :ret [any? ::log/entries])
 (defn install-schema-from-resource!
-  [{:keys [::db/uri
+  [{:keys [::db/database-uri
            ::db/partition-name
            ::db/protocol
-           ::db/schema-resource-name]
+           ::db/schema-resource-name
+           ::db/uri]
     :as this} logs]
   (let [uri-description (::db/description uri)
         logs (log/debug logs
@@ -405,7 +406,7 @@ to the actual datastructure that datomic uses"
         (if tx-description
           (try
             (install-schema! logs
-                             #_uri-description (::db/database-uri this)
+                             database-uri
                              partition-name
                              tx-description)
             (catch IllegalArgumentException ex

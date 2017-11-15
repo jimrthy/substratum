@@ -86,6 +86,7 @@ probably get moved into, say, _impl"
 (s/def ::upsert-transaction
   (s/merge ::base-transaction
            (s/map-of keyword? any?)))
+(s/def ::upsert-txns (s/coll-of ::upsert-transaction))
 
 ;;; Q: What's a good way to represent these?
 ;; UpsertTransactions get translated into these,
@@ -244,7 +245,7 @@ if it doesn't already exast and cache the connection"
 
 (s/fdef pretend-upsert!
         :args (s/cat :uri ::connection-string
-                     :txns (s/coll-of ::upsert-transaction))
+                     :txns ::upsert-txns)
         :ret ::transaction-result)
 (defn pretend-upsert!
   "Re-bind upsert! to this for experimentation
@@ -261,7 +262,7 @@ var lookup"
 
 (s/fdef upsert!
         :args (s/cat :uri ::connection-string
-                     :txns (s/coll-of ::upsert-transaction))
+                     :txns ::upsert-txns)
         :ret ::transaction-result)
 (defn upsert!
   [uri txns]
