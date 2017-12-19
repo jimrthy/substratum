@@ -3,6 +3,7 @@
   (:require [clojure.spec.alpha :as s])
   (:import clojure.lang.ExceptionInfo
            java.io.OutputStream))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specs
 

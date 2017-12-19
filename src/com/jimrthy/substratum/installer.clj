@@ -23,7 +23,7 @@ in that direction."
   (:import [clojure.lang ExceptionInfo]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Specs
+;;;; Specs
 
 ;; TODO: Be more restrictive
 (s/def ::schema-resource-name string?)
@@ -108,9 +108,13 @@ in that direction."
 
 ;; Really just a sequence of names
 (s/def ::part-txn-descr-seq (s/coll-of string?))
-(s/def ::attribute-options (s/cat :primitive-type ::primitive-type
-                                  ;; Punt on this one for now
-                                  :options (s/coll-of any?)))
+;; This is a tuple of the type name and options
+;; associated with the attribute to consider.
+(s/def ::attribute-options (s/tuple ::value-types
+                                    ;; Punt on this one for now.
+                                    ;; Really should spec out which
+                                    ;; options are legal here.
+                                    (s/coll-of any?)))
 (s/def ::type-description (s/map-of symbol? ::attribute-options))
 ;; Symbol that describes the type, mapped to a tuple of the primitive type
 ;; (as a keyword) and an optional set of options (most importantly, the doc string)
@@ -151,7 +155,7 @@ in that direction."
 (s/def ::conformation-sequence (s/coll-of ::conformation))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Internal
+;;;; Internal
 
 ;; TODO: ^:always-validate
 ;; TODO: Refactor/rename to do-schema-installation!
@@ -211,26 +215,49 @@ in that direction."
         (log/debug logger
                    ::load-txns
                    "Getting ready to load schema transaction from resource"
-                   {::name resource-name})])
-  [(util/load-resource resource-name) logger])
+                   {::name resource-name})
+        raw (util/load-resource resource-name)]
+    (expand-txn-descr logger raw)))
 
+(s/fdef schema-black-magic
+        :args (s/cat :logger ::log/entries
+                     :dscr (s/tuple symbol?
+                                    (s/map-of symbol?
+                                              ::attribute-options)))
+        :ret any?)
 (defn schema-black-magic
   "Converts a pair of (attribute name, field descriptions) into something datomic-schema can expand.
 
 Really just refactored out of a map description"
   [logger
-   [attr field-descrs]]
+   [type-name field-descrs]]
+  (when-not (symbol? type-name)
+    (throw (ex-info "Field name must be a symbol"
+                    {::type type-name
+                     ::dscrs field-descrs
+                     ::logs logger})))
+  (when-let [problem (s/explain-data (s/map-of symbol?
+                                               ::attribute-options)
+                                     field-descrs)]
+    (throw (ex-info "Invalid attribute"
+                    {::type type-name
+                     ::field-descriptions field-descrs
+                     ::log/entries logger
+                     ::problem problem})))
   (let [logger (log/debug logger ::black-magic
                           "Expand attribute/field descriptions"
-                          {::attribute-name attr
+                          {::type type-name
                            ::description field-descrs})]
     ;; Under the covers, Yuppiechef's schema macro just
     ;; calls schema*.
-    (yuppie-schema/schema* (name attr)
+    (yuppie-schema/schema* (name type-name)
                            {:fields (reduce (fn [[logger
                                                   acc] [k v]]
-                                              (comment (.debug logger "Setting up field" k "with characteristics" v))
-                                              (let [result
+                                              (let [logger (log/debug logger
+                                                                      ::schema-black-magic
+                                                                      (str "Setting up field" k "with characteristics")
+                                                                      v)
+                                                    result
                                                     (assoc acc (name k)
                                                            (if (= (count v) 1)
                                                              ;; If there isn't an option set,
@@ -257,13 +284,13 @@ Really just refactored out of a map description"
         :ret (s/tuple any? ::log/log-entries))
 (defn expand-schema-descr
   "Isolating a helper function to start expanding attribute descriptions into transactions"
-  [logger descr]
+  [logger dscr]
   (let [logger
         (log/info logger
                   ::schema.expansion
                   "Expanding Schema Description"
-                  descr)]
-    (map schema-black-magic logger descr)))
+                  dscr)]
+    (map schema-black-magic logger dscr)))
 
 (defn expanded-descr->schema
   "Take the output of expand-schema-descr (which should be identical
@@ -288,17 +315,17 @@ to the actual datastructure that datomic uses"
   (let [logger (log/info logger ::expand.txn-dscr
                          "Expanding Transaction Description"
                          descr)])
-  (let [parts (map yuppie-schema/part (:partitions descr))
-        [attrs logger] (expand-schema-descr logger (:attribute-types descr))
+  (let [parts (map yuppie-schema/part (::partitions descr))
+        [attrs logger] (expand-schema-descr logger (::attribute-types descr))
         [generated-schema logger] (expanded-descr->schema logger attrs)
-        entities (:attributes descr)]
+        entities (::attributes descr)]
     [{::structure (concat (yuppie-schema/generate-parts parts)
                          generated-schema)
       ::data entities}
      logger]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Public
+;;;; Public
 
 ;;; It's generally better to just install your schema from a resource
 ;;; definition.

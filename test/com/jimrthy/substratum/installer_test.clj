@@ -14,13 +14,14 @@
                                             generate-parts
                                             generate-schema
                                             part
-                                            schema)]
+                                            schema)
+             :as yuppie-schema]
             [io.rkn.conformity :as conformity])
   (:import [clojure.lang ExceptionInfo IExceptionInfo]
            [datomic.impl Exceptions$IllegalArgumentExceptionInfo]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Boilerplate
+;;;; Boilerplate
 
 (defn system-for-testing
   "Note that these are simulating records. Which means the keys can't be namespaced"
@@ -35,8 +36,7 @@
     (println (keys tester))))
 
 (defn in-mem-db-system
-  "The really annoying thing about this approach is that I
-can't just call the individual tests manually"
+  "Set up a system with an in-memory database for testing"
   [logger]
   (try
     (let [{:keys [::schema
@@ -44,7 +44,7 @@ can't just call the individual tests manually"
            :as pre-testable-system} (system-for-testing)
           [uri logs] (db/start! logger uri-dscr)]
       ;; Most tests probably make sense to run against that
-      ;; TODO: Add test features (Q: did I mean schema?)
+      ;; TODO: Add test features (Q: did I mean platform schema?)
       (try
         (let [logs (log/info logs
                              ::message "Started System"
@@ -88,7 +88,11 @@ can't just call the individual tests manually"
     (log/flush-logs! log-fx logs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Helpers
+;;;; Helpers
+
+;;;; This section has a strange mix. There are helpers, and
+;;;; then there are pieces that set up a subset of the platform
+;;;; schema.
 
 (s/fdef extract-connection-string
         :ret string?)
@@ -100,6 +104,7 @@ can't just call the individual tests manually"
   (::db/connection-string uri))
 
 (defn test-partition
+  "Define a database partition for holding test records"
   []
   [(part "test")])
 
@@ -220,7 +225,7 @@ and vice versa"
                          :lhs s1}))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Actual Tests
+;;;; Actual Tests
 
 (deftest datatype-schema
   "Prove that I can I can add minimalist schema to the database
@@ -311,6 +316,44 @@ But, seriously. I had to start somewhere."
       (finally
         (clean-up system @logs)))))
 
+(deftest sample-data-types
+  (let [dscr '{dt {dt [:db.type/ref #{"Think of an object's class"}]
+                   namespace [:db.type/string #{"Think of a class' package"}]
+                   name [:db.type/string #{".getSimpleName"}]
+                   parent [:db.type/ref #{"For Type hierarchies and inheritance"}]
+                   list [:db.type/ref #{"For N-d lists"}]
+                   component [:db.type/ref #{"If this Type is a list, this describes what that list contains"}]
+                   fields [:db.type/ref #{"Member variables" :many}]
+                   any [:db.type/ref #{"Built-in types enumeration. Needs to point to a dt.any Entity"}]}
+               ;; These next are for the Any/Variant type
+               dt.any {bigdec [:db.type/bigdec]
+                       bigint [:db.type/bigint]
+                       boolean [:db.type/boolean]
+                       bytes [:db.type/bytes]
+                       double [:db.type/double]
+                       float [:db.type/float]
+                       instant [:db.type/instant]
+                       keyword [:db.type/keyword]
+                       long [:db.type/long]
+                       ref [:db.type/ref]
+                       string [:db.type/string]
+                       uri [:db.type/uri]
+                       uuid [:db.type/uuid]}}
+        logs []
+        [attrs logs] (installer/expand-schema-descr logs dscr)
+        ;; This is a macro, so I can't map over it.
+        ;; And my raw dscr doesn't match his.
+        ;; Cutting down on verbosity is a big part of substratum's
+        ;; justification.
+        reference-attrs (yuppie-schema/schema dscr)
+        [generated-schema logs] (installer/expanded-descr->schema logs attrs)]
+    ;; FIXME: Need to be able to flush logs
+    (comment
+      (log/flush! logs))
+    (pprint logs)
+    (is (= reference-attrs attrs))
+    (is (s/valid? ::installer/platform-txns generated-schema))))
+
 (deftest schema-resource
   (let [[tx-dscr logs]
         (installer/load-transactions-from-resource!
@@ -358,7 +401,9 @@ But, seriously. I had to start somewhere."
             conn (d/connect cxn-str)]
         (testing "No interesting attributes, before installation"
           (is (not (conformity/has-attribute? (d/db conn) :dt/dt))))
-        (let [uri (:database-uri system)
+        (let [logs (atom [])
+              system (in-mem-db-system @logs)
+              uri (:database-uri system)
               dscr {:uri uri
                     :schema-resource-name "test-schema.edn"
                     :partition-name "Data Platform Basics"}]

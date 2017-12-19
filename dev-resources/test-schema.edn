@@ -1,30 +1,30 @@
-{:partitions ["testing-base" "testing-one" "something-completely-different"]
- :attribute-types {dt {dt [:ref #{"Think of an object's class"}]
-                        namespace [:string #{"Think of a class' package"}]
-                        name [:string #{".getSimpleName"}]
-                        parent [:ref #{"For Type hierarchies and inheritance"}]
-                        list [:ref #{"For N-d lists"}]
-                        component [:ref #{"If this Type is a list, this describes what that list contains"}]
-                        fields [:ref #{"Member variables" :many}]
-                        any [:ref #{"Built-in types enumeration. Needs to point to a dt.any Entity"}]}
-                    ;; These next are for the Any/Variant type
-                    dt.any {bigdec [:bigdec]
-                            bigint [:bigint]
-                            boolean [:boolean]
-                            bytes [:bytes]
-                            double [:double]
-                            float [:float]
-                            instant [:instant]
-                            keyword [:keyword]
-                            long [:long]
-                            ref [:ref]
-                            string [:string]
-                            uri [:uri]
-                            uuid [:uuid]}}
- ;; Baseline datatype
- :attributes [{:db/id :dt/dt
-               :dt/dt :dt/dt
-               :dt/namespace "system"
-               :dt/name "Datatype"
-               :dt/fields [:dt/dt :dt/namespace :dt/name :dt/parent
-                           :dt/list :dt/component :dt/fields]}]}
+#:com.jimrthy.substratum.installer {:partitions ["testing-base" "testing-one" "something-completely-different"]
+                                    :attribute-types {dt {dt [:db.type/ref #{"Think of an object's class"}]
+                                                          namespace [:db.type/string #{"Think of a class' package"}]
+                                                          name [:db.type/string #{".getSimpleName"}]
+                                                          parent [:db.type/ref #{"For Type hierarchies and inheritance"}]
+                                                          list [:db.type/ref #{"For N-d lists"}]
+                                                          component [:db.type/ref #{"If this Type is a list, this describes what that list contains"}]
+                                                          fields [:db.type/ref #{"Member variables" :many}]
+                                                          any [:db.type/ref #{"Built-in types enumeration. Needs to point to a dt.any Entity"}]}
+                                                      ;; These next are for the Any/Variant type
+                                                      dt.any {bigdec [:db.type/bigdec]
+                                                              bigint [:db.type/bigint]
+                                                              boolean [:db.type/boolean]
+                                                              bytes [:db.type/bytes]
+                                                              double [:db.type/double]
+                                                              float [:db.type/float]
+                                                              instant [:db.type/instant]
+                                                              keyword [:db.type/keyword]
+                                                              long [:db.type/long]
+                                                              ref [:db.type/ref]
+                                                              string [:db.type/string]
+                                                              uri [:db.type/uri]
+                                                              uuid [:db.type/uuid]}}
+                                    ;; Baseline datatype
+                                    :attributes [{:db/id :dt/dt
+                                                  :dt/dt :dt/dt
+                                                  :dt/namespace "system"
+                                                  :dt/name "Datatype"
+                                                  :dt/fields [:dt/dt :dt/namespace :dt/name :dt/parent
+                                                              :dt/list :dt/component :dt/fields]}]}
